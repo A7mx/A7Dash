@@ -50,14 +50,15 @@ function getLondonTime() {
   // Comment out the lines below for production
   now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
   now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
-  return now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+  return now;
 }
 
 function getLondonDateISO() {
-  const londonTime = getLondonTime();
-  const [datePart] = londonTime.split(', ');
-  const [day, month, year] = datePart.split('/');
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  const now = getLondonTime();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // Serve Login Page
@@ -464,7 +465,7 @@ function formatTime(seconds) {
 
 // Bot Ready Event
 client.once('ready', () => {
-  console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime()}`);
+  console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
 });
 
 // Handle Voice State Updates
@@ -490,13 +491,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   userVoiceData.daily_times = userVoiceData.daily_times || {};
   userVoiceData.total_time = userVoiceData.total_time || 0;
 
-  const now = new Date(getLondonTime()); // Use Europe/London time
+  const now = getLondonTime(); // Use Europe/London time
   const today = getLondonDateISO(); // ISO format for Europe/London date
 
   if (newState.channelId && !oldState.channelId) {
     // User joined a voice channel
     userVoiceData.join_time = now.getTime();
-    console.log(`${user.id} joined voice channel at ${now.toISOString()} (London time: ${getLondonTime()})`);
+    console.log(`${user.id} joined voice channel at ${now.toISOString()} (London time: ${now.toLocaleString('en-GB', { timeZone: 'Europe/London' })})`);
     await saveUserVoiceData({
       discord_id: user.id,
       nickname: userVoiceData.nickname,
@@ -513,7 +514,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       userVoiceData.total_time += timeSpent;
       userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + timeSpent;
       userVoiceData.join_time = null;
-      console.log(`${user.id} left voice channel at ${now.toISOString()} (London time: ${getLondonTime()}), spent ${timeSpent} seconds`);
+      console.log(`${user.id} left voice channel at ${now.toISOString()} (London time: ${now.toLocaleString('en-GB', { timeZone: 'Europe/London' })}), spent ${timeSpent} seconds`);
       await saveUserVoiceData({
         discord_id: user.id,
         nickname: userVoiceData.nickname,
@@ -545,7 +546,7 @@ function generateUserCard(user) {
 }
 
 // Start the Server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
