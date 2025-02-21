@@ -43,6 +43,23 @@ let cachedUsers = [];
 let lastUserFetch = 0;
 const USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Helper function to get Europe/London time
+function getLondonTime() {
+  const now = new Date();
+  // For testing, simulate 01:06 GMT on 22/02/2025
+  // Comment out the lines below for production
+  now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
+  now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
+  return now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+}
+
+function getLondonDateISO() {
+  const londonTime = getLondonTime();
+  const [datePart] = londonTime.split(', ');
+  const [day, month, year] = datePart.split('/');
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
 // Serve Login Page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
@@ -447,7 +464,7 @@ function formatTime(seconds) {
 
 // Bot Ready Event
 client.once('ready', () => {
-  console.log(`Bot logged in as ${client.user.tag} on ${new Date().toISOString()}`);
+  console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime()}`);
 });
 
 // Handle Voice State Updates
@@ -473,13 +490,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   userVoiceData.daily_times = userVoiceData.daily_times || {};
   userVoiceData.total_time = userVoiceData.total_time || 0;
 
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const now = new Date(getLondonTime()); // Use Europe/London time
+  const today = getLondonDateISO(); // ISO format for Europe/London date
 
   if (newState.channelId && !oldState.channelId) {
     // User joined a voice channel
     userVoiceData.join_time = now.getTime();
-    console.log(`${user.id} joined voice channel at ${now.toISOString()}`);
+    console.log(`${user.id} joined voice channel at ${now.toISOString()} (London time: ${getLondonTime()})`);
     await saveUserVoiceData({
       discord_id: user.id,
       nickname: userVoiceData.nickname,
@@ -496,7 +513,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       userVoiceData.total_time += timeSpent;
       userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + timeSpent;
       userVoiceData.join_time = null;
-      console.log(`${user.id} left voice channel at ${now.toISOString()}, spent ${timeSpent} seconds`);
+      console.log(`${user.id} left voice channel at ${now.toISOString()} (London time: ${getLondonTime()}), spent ${timeSpent} seconds`);
       await saveUserVoiceData({
         discord_id: user.id,
         nickname: userVoiceData.nickname,
