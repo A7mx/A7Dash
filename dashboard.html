@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A7 Community Dashboard</title>
+    <title>A7 Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -385,25 +385,6 @@
         body.dark-mode .circle-middle input[type="date"]::-webkit-calendar-picker-indicator {
             filter: invert(100%);
         }
-        .profile-details {
-            padding: 1rem;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            transition: background 0.3s;
-        }
-        body.dark-mode .profile-details {
-            background: #2d3436;
-        }
-        .profile-details p {
-            font-size: 1.1rem;
-            margin: 0.5rem 0;
-        }
-        .emoji {
-            font-size: 1.5rem;
-            margin-right: 0.5rem;
-        }
         .modal {
             display: none;
             position: fixed;
@@ -579,6 +560,19 @@
         let currentUser;
         let timerInterval;
 
+        // Helper function to get Europe/London time
+        function getLondonDateISO() {
+            const now = new Date();
+            // For testing, simulate 01:06 GMT on 22/02/2025
+            // Comment out the lines below for production
+            now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
+            now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
+            const londonTime = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+            const [datePart] = londonTime.split(', ');
+            const [day, month, year] = datePart.split('/');
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+
         if (localStorage.getItem('darkMode') === 'true') {
             document.body.classList.add('dark-mode');
             document.getElementById('themeToggle').innerHTML = '<path d="M12 7a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0-2a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zm0-2a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9z"/>';
@@ -643,7 +637,7 @@
         });
 
         async function fetchDailyTime() {
-            const date = document.getElementById('datePicker').value || new Date().toISOString().split('T')[0];
+            const date = document.getElementById('datePicker').value || getLondonDateISO();
             try {
                 const response = await fetch(`/api/user/voice-time?date=${date}&discordId=${currentUser.discord_id}`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
@@ -659,7 +653,7 @@
                 document.getElementById('dailyTime').textContent = '00:00:00';
                 document.getElementById('totalTime').textContent = '00:00:00';
                 document.getElementById('monthlyTime').textContent = '00:00:00';
-                document.getElementById('selectedDate').textContent = new Date().toISOString().split('T')[0];
+                document.getElementById('selectedDate').textContent = getLondonDateISO();
             }
         }
 
@@ -706,7 +700,7 @@
 
         async function showUserTime(discordId) {
             try {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getLondonDateISO();
                 const response = await fetch(`/api/user/voice-time?date=${today}&discordId=${discordId}`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
@@ -879,6 +873,9 @@
 
         function calculateMonthlyTime(dailyTimes) {
             const now = new Date();
+            // For testing, simulate 01:06 GMT on 22/02/2025
+            now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
+            now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
             return Object.entries(dailyTimes)
                 .filter(([date]) => date >= monthStart)
@@ -905,7 +902,7 @@
                 const unregisteredVoiceUsers = voiceData.filter(user => !registeredIds.has(user.discord_id));
                 unregisteredVoiceUsers.sort((a, b) => (b.total_time || 0) - (a.total_time || 0));
 
-                const selectedDate = document.getElementById('timeDatePicker').value || new Date().toISOString().split('T')[0];
+                const selectedDate = document.getElementById('timeDatePicker').value || getLondonDateISO();
                 const list = document.getElementById('timeList');
                 list.innerHTML = '';
 
