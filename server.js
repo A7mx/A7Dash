@@ -38,12 +38,10 @@ app.use(express.static(path.join(__dirname)));
 // Temporary storage for 2FA codes
 const twoFactorCodes = new Map();
 
-// Cached users to reduce Discord fetches
+// Cached users and voice data
 let cachedUsers = [];
 let lastUserFetch = 0;
 const USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-// Cached voice data to reduce Firestore queries
 const voiceDataCache = new Map();
 let lastVoiceDataFetch = 0;
 const VOICE_CACHE_DURATION = 1 * 60 * 1000; // 1 minute
@@ -52,13 +50,18 @@ const VOICE_CACHE_DURATION = 1 * 60 * 1000; // 1 minute
 const debounceTimers = new Map();
 const DEBOUNCE_DELAY = 5000; // 5 seconds
 
+// Simulated time counter for testing
+let simulatedTimeOffset = 0;
+
 // Helper function to get Europe/London time as a Date object
 function getLondonTime() {
   const now = new Date();
-  // For testing, simulate 01:06 GMT on 22/02/2025
+  // For testing, simulate 01:06 GMT on 22/02/2025 with incremental offset
   // Comment out the lines below for production
   now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
-  now.setUTCHours(1, 6, 0, 0); // 01:06 GMT (London time, no DST in Feb)
+  now.setUTCHours(1, 6, 0, 0); // 01:06 GMT base
+  now.setUTCSeconds(now.getUTCSeconds() + simulatedTimeOffset); // Increment time
+  simulatedTimeOffset += 5; // Add 5 seconds per event for testing
   return now;
 }
 
@@ -68,6 +71,19 @@ function getLondonDateISO() {
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
   const day = String(now.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Preload voice data cache on startup
+async function preloadVoiceDataCache() {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'voice_data'));
+    querySnapshot.forEach((doc) => {
+      voiceDataCache.set(doc.id, { discord_id: doc.id, ...doc.data() });
+    });
+    lastVoiceDataFetch = Date.now();
+  } catch (error) {
+    console.error('Error preloading voice data:', error.message);
+  }
 }
 
 // Serve Login Page
@@ -86,9 +102,7 @@ app.post('/api/auth/login', async (req, res) => {
   const users = await fetchUsersFromDiscord();
   const user = users.find(u => u.username === username && u.password === password);
 
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
+  if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
   const token = `user_${user.discord_id}`;
   res.json({ token });
@@ -97,9 +111,7 @@ app.post('/api/auth/login', async (req, res) => {
 // API Route: Request 2FA Code (Admins Only)
 app.post('/api/auth/request-2fa', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const discordId = token.replace('user_', '');
   const users = await fetchUsersFromDiscord();
@@ -127,26 +139,18 @@ app.post('/api/auth/request-2fa', async (req, res) => {
 app.post('/api/auth/verify-2fa', async (req, res) => {
   const { code } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const discordId = token.replace('user_', '');
-  if (!twoFactorCodes.has(discordId)) {
-    return res.status(401).json({ message: 'Invalid or expired session' });
-  }
+  if (!twoFactorCodes.has(discordId)) return res.status(401).json({ message: 'Invalid or expired session' });
 
   const { code: storedCode, expires } = twoFactorCodes.get(discordId);
-
   if (Date.now() > expires) {
     twoFactorCodes.delete(discordId);
     return res.status(401).json({ message: 'Code expired' });
   }
 
-  if (code !== storedCode) {
-    return res.status(401).json({ message: 'Invalid code' });
-  }
+  if (code !== storedCode) return res.status(401).json({ message: 'Invalid code' });
 
   twoFactorCodes.delete(discordId);
   res.json({ message: '2FA verified successfully' });
@@ -155,16 +159,11 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
 // API Route: Get Current User
 app.get('/api/user/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const users = await fetchUsersFromDiscord();
   const user = users.find(u => `user_${u.discord_id}` === token);
-
-  if (!user) {
-    return res.status(404).json({ message: 'User not found' });
-  }
+  if (!user) return res.status(404).json({ message: 'User not found' });
 
   res.json(user);
 });
@@ -183,7 +182,6 @@ app.get('/api/user/voice-time', async (req, res) => {
 
     const docRef = doc(db, 'voice_data', discordId);
     const docSnap = await getDoc(docRef);
-
     if (!docSnap.exists()) {
       return res.json({ voiceTime: '00:00:00', totalTime: '00:00:00', dailyTimes: {}, nickname: '' });
     }
@@ -203,9 +201,7 @@ app.get('/api/user/voice-time', async (req, res) => {
 // API Route: Get All Users
 app.get('/api/admin/all-users', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const registeredUsers = await fetchUsersFromDiscord();
   const currentUser = registeredUsers.find(u => `user_${u.discord_id}` === token);
@@ -234,16 +230,11 @@ app.get('/api/admin/all-users', async (req, res) => {
 // API Route: Get Voice Data
 app.get('/api/admin/voice-data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const registeredUsers = await fetchUsersFromDiscord();
   const currentUser = registeredUsers.find(u => `user_${u.discord_id}` === token);
-
-  if (!currentUser) {
-    return res.status(404).json({ message: 'User not found' });
-  }
+  if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
   const voiceData = await fetchVoiceDataFromFirestore();
   if (isAdmin(currentUser.discord_id)) {
@@ -262,19 +253,12 @@ app.get('/api/admin/voice-data', async (req, res) => {
 app.post('/api/user/change-password', async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const users = await fetchUsersFromDiscord();
   const user = users.find(u => `user_${u.discord_id}` === token);
-
-  if (!user) {
-    return res.status(404).json({ message: 'User not found' });
-  }
-  if (user.password !== oldPassword) {
-    return res.status(400).json({ message: 'Old password is incorrect' });
-  }
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  if (user.password !== oldPassword) return res.status(400).json({ message: 'Old password is incorrect' });
 
   user.password = newPassword;
   await updateSingleUserInDiscord(user);
@@ -285,9 +269,7 @@ app.post('/api/user/change-password', async (req, res) => {
 app.post('/api/admin/update-user', async (req, res) => {
   const { discord_id, username, nickname, password } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const users = await fetchUsersFromDiscord();
   const currentUser = users.find(u => `user_${u.discord_id}` === token);
@@ -334,9 +316,7 @@ app.post('/api/admin/update-user', async (req, res) => {
 app.post('/api/admin/delete-user', async (req, res) => {
   const { discord_id } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   const users = await fetchUsersFromDiscord();
   const currentUser = users.find(u => `user_${u.discord_id}` === token);
@@ -345,9 +325,7 @@ app.post('/api/admin/delete-user', async (req, res) => {
   }
 
   const userToDelete = users.find(u => u.discord_id === discord_id);
-  if (!userToDelete) {
-    return res.status(404).json({ message: 'User not found' });
-  }
+  if (!userToDelete) return res.status(404).json({ message: 'User not found' });
 
   try {
     const dbChannel = await client.channels.fetch(process.env.DATABASE_CHANNEL_ID);
@@ -436,6 +414,7 @@ async function fetchVoiceDataFromFirestore() {
 
   try {
     const querySnapshot = await getDocs(collection(db, 'voice_data'));
+    voiceDataCache.clear();
     const voiceData = [];
     querySnapshot.forEach((doc) => {
       const data = { discord_id: doc.id, ...doc.data() };
@@ -455,9 +434,7 @@ function debounceSaveUserVoiceData(userVoiceData) {
   const { discord_id } = userVoiceData;
   voiceDataCache.set(discord_id, { ...voiceDataCache.get(discord_id), ...userVoiceData });
 
-  if (debounceTimers.has(discord_id)) {
-    clearTimeout(debounceTimers.get(discord_id));
-  }
+  if (debounceTimers.has(discord_id)) clearTimeout(debounceTimers.get(discord_id));
 
   debounceTimers.set(discord_id, setTimeout(async () => {
     try {
@@ -491,13 +468,13 @@ function formatTime(seconds) {
 }
 
 // Bot Ready Event
-client.once('ready', () => {
-  const now = getLondonTime();
-  console.log(`Bot logged in as ${client.user.tag} on ${now.toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
+client.once('ready', async () => {
+  await preloadVoiceDataCache();
+  console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
 });
 
-// Handle Voice State Updates
-client.on('voiceStateUpdate', async (oldState, newState) => {
+// Handle Voice State Updates (Silent)
+client.on('voiceStateUpdate', (oldState, newState) => {
   const user = newState.member?.user;
   if (!user) return;
 
@@ -509,13 +486,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     daily_times: {},
     join_time: null
   };
-
-  const registeredUsers = await fetchUsersFromDiscord();
-  const registeredUser = registeredUsers.find(u => u.discord_id === user.id);
-  userVoiceData.nickname = registeredUser ? registeredUser.nickname : user.username;
-  userVoiceData.avatar = registeredUser ? registeredUser.avatar : (user.avatarURL()?.toString() || 'https://via.placeholder.com/100');
-  userVoiceData.daily_times = userVoiceData.daily_times || {};
-  userVoiceData.total_time = userVoiceData.total_time || 0;
 
   const now = getLondonTime();
   const today = getLondonDateISO();
