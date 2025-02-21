@@ -417,6 +417,7 @@ async function fetchVoiceDataFromFirestore() {
 async function saveUserVoiceData(userVoiceData) {
   try {
     const { discord_id, nickname, avatar, total_time, dailyTimes, joinTime } = userVoiceData;
+    console.log(`Saving voice data for ${discord_id}:`, { total_time, dailyTimes, joinTime });
     await setDoc(doc(db, 'voice_data', discord_id), {
       nickname,
       avatar,
@@ -424,6 +425,7 @@ async function saveUserVoiceData(userVoiceData) {
       daily_times: dailyTimes || {},
       join_time: joinTime || null
     }, { merge: true });
+    console.log(`Voice data saved for ${discord_id}`);
   } catch (error) {
     console.error('Error saving voice data:', error.message);
   }
@@ -445,7 +447,7 @@ function formatTime(seconds) {
 
 // Bot Ready Event
 client.once('ready', () => {
-  console.log(`Bot logged in as ${client.user.tag}`);
+  console.log(`Bot logged in as ${client.user.tag} on ${new Date().toISOString()}`);
 });
 
 // Handle Voice State Updates
@@ -468,35 +470,39 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   const registeredUser = registeredUsers.find(u => u.discord_id === user.id);
   userVoiceData.nickname = registeredUser ? registeredUser.nickname : user.username;
   userVoiceData.avatar = registeredUser ? registeredUser.avatar : (user.avatarURL()?.toString() || 'https://via.placeholder.com/100');
-  userVoiceData.dailyTimes = userVoiceData.daily_times || {};
+  userVoiceData.daily_times = userVoiceData.daily_times || {};
   userVoiceData.total_time = userVoiceData.total_time || 0;
 
   const now = new Date();
   const today = now.toISOString().split('T')[0];
 
   if (newState.channelId && !oldState.channelId) {
+    // User joined a voice channel
     userVoiceData.join_time = now.getTime();
+    console.log(`${user.id} joined voice channel at ${now.toISOString()}`);
     await saveUserVoiceData({
       discord_id: user.id,
       nickname: userVoiceData.nickname,
       avatar: userVoiceData.avatar,
       total_time: userVoiceData.total_time,
-      dailyTimes: userVoiceData.dailyTimes,
+      dailyTimes: userVoiceData.daily_times,
       joinTime: userVoiceData.join_time
     });
   } else if (!newState.channelId && oldState.channelId) {
+    // User left a voice channel
     if (userVoiceData.join_time) {
       const leaveTime = now.getTime();
       const timeSpent = Math.floor((leaveTime - userVoiceData.join_time) / 1000);
       userVoiceData.total_time += timeSpent;
-      userVoiceData.dailyTimes[today] = (userVoiceData.dailyTimes[today] || 0) + timeSpent;
+      userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + timeSpent;
       userVoiceData.join_time = null;
+      console.log(`${user.id} left voice channel at ${now.toISOString()}, spent ${timeSpent} seconds`);
       await saveUserVoiceData({
         discord_id: user.id,
         nickname: userVoiceData.nickname,
         avatar: userVoiceData.avatar,
         total_time: userVoiceData.total_time,
-        dailyTimes: userVoiceData.dailyTimes,
+        dailyTimes: userVoiceData.daily_times,
         joinTime: userVoiceData.join_time
       });
     }
