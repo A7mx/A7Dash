@@ -208,7 +208,7 @@ app.get('/api/user/voice-time', async (req, res) => {
   }
 });
 
-// API Route: Get All Users with Roles
+// API Route: Get All Users with Roles (Admin Only)
 app.get('/api/admin/all-users', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -252,8 +252,8 @@ app.get('/api/admin/all-users', async (req, res) => {
   res.json(allUsers);
 });
 
-// API Route: Get Voice Data
-app.get('/api/admin/voice-data', async (req, res) => {
+// API Route: Get Voice Data (Public - Accessible to All Users)
+app.get('/api/voice-data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
 
@@ -264,40 +264,22 @@ app.get('/api/admin/voice-data', async (req, res) => {
   const guild = client.guilds.cache.first();
   let voiceData = Array.from(voiceDataCache.values());
 
-  if (isAdmin(currentUser.discord_id)) {
-    const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
-      let discordRole = 'user';
-      let serverNickname = data.nickname; // Default to stored nickname
-      try {
-        const member = await guild.members.fetch(data.discord_id);
-        const roles = member.roles.cache.map(r => r.id);
-        if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
-        else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
-        else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
-        serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
-      } catch (error) {
-        // User might not be in guild
-      }
-      return { ...data, nickname: serverNickname, isWebsiteAdmin: isAdmin(data.discord_id), discordRole };
-    }));
-    res.json(voiceDataWithRoles);
-  } else {
-    const userVoiceData = voiceData.find(data => data.discord_id === currentUser.discord_id) || { 
-      discord_id: currentUser.discord_id, 
-      total_time: 0, 
-      daily_times: {},
-      isWebsiteAdmin: isAdmin(currentUser.discord_id),
-      discordRole: 'user',
-      nickname: currentUser.nickname
-    };
+  const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
+    let discordRole = 'user';
+    let serverNickname = data.nickname; // Default to stored nickname
     try {
-      const member = await guild.members.fetch(currentUser.discord_id);
-      userVoiceData.nickname = member.nickname || member.user.username;
+      const member = await guild.members.fetch(data.discord_id);
+      const roles = member.roles.cache.map(r => r.id);
+      if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
+      else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
+      else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
+      serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
     } catch (error) {
-      // Keep default if fetch fails
+      // User might not be in guild
     }
-    res.json([userVoiceData]);
-  }
+    return { ...data, nickname: serverNickname, isWebsiteAdmin: isAdmin(data.discord_id), discordRole };
+  }));
+  res.json(voiceDataWithRoles);
 });
 
 // API Route: Change Password
@@ -316,7 +298,7 @@ app.post('/api/user/change-password', async (req, res) => {
   res.json({ message: 'Password changed successfully!' });
 });
 
-// API Route: Update User (Handles Registration Too)
+// API Route: Update User (Handles Registration Too - Admin Only)
 app.post('/api/admin/update-user', async (req, res) => {
   const { discord_id, username, nickname, password } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
@@ -363,7 +345,7 @@ app.post('/api/admin/update-user', async (req, res) => {
   }
 });
 
-// API Route: Delete User
+// API Route: Delete User (Admin Only)
 app.post('/api/admin/delete-user', async (req, res) => {
   const { discord_id } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
