@@ -28,7 +28,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.GuildMembers, // Added to fetch member roles
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -166,7 +166,16 @@ app.get('/api/user/me', async (req, res) => {
   const user = users.find(u => `user_${u.discord_id}` === token);
   if (!user) return res.status(404).json({ message: 'User not found' });
 
-  res.json(user);
+  const guild = client.guilds.cache.first();
+  let serverNickname = user.nickname;
+  try {
+    const member = await guild.members.fetch(user.discord_id);
+    serverNickname = member.nickname || member.user.username;
+  } catch (error) {
+    // Keep stored nickname if fetch fails
+  }
+
+  res.json({ ...user, nickname: serverNickname });
 });
 
 // API Route: Get Voice Time
@@ -213,25 +222,28 @@ app.get('/api/admin/all-users', async (req, res) => {
   const voiceData = await fetchVoiceDataFromFirestore();
   const guild = client.guilds.cache.first(); // Assumes bot is in one guild; adjust if multi-guild
   const allUsers = await Promise.all(registeredUsers.map(async (user) => {
-    let role = 'user';
+    let discordRole = 'user';
+    let serverNickname = user.nickname; // Default to stored nickname
     try {
       const member = await guild.members.fetch(user.discord_id);
       const roles = member.roles.cache.map(r => r.id);
-      if (roles.includes(process.env.SUPERADMIN_ROLE)) role = 'superadmin';
-      else if (roles.includes(process.env.ADMIN_ROLE)) role = 'admin';
-      else if (roles.includes(process.env.COADMIN_ROLE)) role = 'coadmin';
+      if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
+      else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
+      else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
+      serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
     } catch (error) {
-      // User might not be in guild; default to 'user'
+      // User might not be in guild; keep stored nickname
     }
 
     const userVoiceData = voiceData.find(data => data.discord_id === user.discord_id);
     return {
       discord_id: user.discord_id,
-      nickname: user.nickname,
+      nickname: serverNickname,
       avatar: user.avatar,
       total_time: userVoiceData?.total_time || 0,
       registered: true,
-      role,
+      isWebsiteAdmin: isAdmin(user.discord_id),
+      discordRole,
       username: user.username,
       password: user.password,
     };
@@ -249,21 +261,24 @@ app.get('/api/admin/voice-data', async (req, res) => {
   const currentUser = registeredUsers.find(u => `user_${u.discord_id}` === token);
   if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
-  const voiceData = await fetchVoiceDataFromFirestore();
+  const guild = client.guilds.cache.first();
+  let voiceData = Array.from(voiceDataCache.values());
+
   if (isAdmin(currentUser.discord_id)) {
-    const guild = client.guilds.cache.first();
     const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
-      let role = 'user';
+      let discordRole = 'user';
+      let serverNickname = data.nickname; // Default to stored nickname
       try {
         const member = await guild.members.fetch(data.discord_id);
         const roles = member.roles.cache.map(r => r.id);
-        if (roles.includes(process.env.SUPERADMIN_ROLE)) role = 'superadmin';
-        else if (roles.includes(process.env.ADMIN_ROLE)) role = 'admin';
-        else if (roles.includes(process.env.COADMIN_ROLE)) role = 'coadmin';
+        if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
+        else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
+        else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
+        serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
       } catch (error) {
         // User might not be in guild
       }
-      return { ...data, role };
+      return { ...data, nickname: serverNickname, isWebsiteAdmin: isAdmin(data.discord_id), discordRole };
     }));
     res.json(voiceDataWithRoles);
   } else {
@@ -271,8 +286,16 @@ app.get('/api/admin/voice-data', async (req, res) => {
       discord_id: currentUser.discord_id, 
       total_time: 0, 
       daily_times: {},
-      role: 'user'
+      isWebsiteAdmin: isAdmin(currentUser.discord_id),
+      discordRole: 'user',
+      nickname: currentUser.nickname
     };
+    try {
+      const member = await guild.members.fetch(currentUser.discord_id);
+      userVoiceData.nickname = member.nickname || member.user.username;
+    } catch (error) {
+      // Keep default if fetch fails
+    }
     res.json([userVoiceData]);
   }
 });
@@ -481,7 +504,7 @@ function debounceSaveUserVoiceData(userVoiceData) {
   }, DEBOUNCE_DELAY));
 }
 
-// Check if a User is an Admin (for legacy purposes)
+// Check if a User is an Admin (Website-specific)
 function isAdmin(discordId) {
   const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
   return adminIds.includes(discordId);
@@ -508,7 +531,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
   let userVoiceData = voiceDataCache.get(user.id) || {
     discord_id: user.id,
-    nickname: user.username,
+    nickname: newState.member?.nickname || user.username, // Use server nickname if available
     avatar: user.avatarURL()?.toString() || 'https://via.placeholder.com/100',
     total_time: 0,
     daily_times: {},
