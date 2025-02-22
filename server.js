@@ -28,6 +28,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildMembers, // Added to fetch member roles
   ],
 });
 
@@ -198,7 +199,7 @@ app.get('/api/user/voice-time', async (req, res) => {
   }
 });
 
-// API Route: Get All Users
+// API Route: Get All Users with Roles
 app.get('/api/admin/all-users', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -210,7 +211,19 @@ app.get('/api/admin/all-users', async (req, res) => {
   }
 
   const voiceData = await fetchVoiceDataFromFirestore();
-  const allUsers = registeredUsers.map(user => {
+  const guild = client.guilds.cache.first(); // Assumes bot is in one guild; adjust if multi-guild
+  const allUsers = await Promise.all(registeredUsers.map(async (user) => {
+    let role = 'user';
+    try {
+      const member = await guild.members.fetch(user.discord_id);
+      const roles = member.roles.cache.map(r => r.id);
+      if (roles.includes(process.env.SUPERADMIN_ROLE)) role = 'superadmin';
+      else if (roles.includes(process.env.ADMIN_ROLE)) role = 'admin';
+      else if (roles.includes(process.env.COADMIN_ROLE)) role = 'coadmin';
+    } catch (error) {
+      // User might not be in guild; default to 'user'
+    }
+
     const userVoiceData = voiceData.find(data => data.discord_id === user.discord_id);
     return {
       discord_id: user.discord_id,
@@ -218,11 +231,11 @@ app.get('/api/admin/all-users', async (req, res) => {
       avatar: user.avatar,
       total_time: userVoiceData?.total_time || 0,
       registered: true,
-      role: user.role,
+      role,
       username: user.username,
       password: user.password,
     };
-  });
+  }));
 
   res.json(allUsers);
 });
@@ -238,12 +251,27 @@ app.get('/api/admin/voice-data', async (req, res) => {
 
   const voiceData = await fetchVoiceDataFromFirestore();
   if (isAdmin(currentUser.discord_id)) {
-    res.json(voiceData);
+    const guild = client.guilds.cache.first();
+    const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
+      let role = 'user';
+      try {
+        const member = await guild.members.fetch(data.discord_id);
+        const roles = member.roles.cache.map(r => r.id);
+        if (roles.includes(process.env.SUPERADMIN_ROLE)) role = 'superadmin';
+        else if (roles.includes(process.env.ADMIN_ROLE)) role = 'admin';
+        else if (roles.includes(process.env.COADMIN_ROLE)) role = 'coadmin';
+      } catch (error) {
+        // User might not be in guild
+      }
+      return { ...data, role };
+    }));
+    res.json(voiceDataWithRoles);
   } else {
     const userVoiceData = voiceData.find(data => data.discord_id === currentUser.discord_id) || { 
       discord_id: currentUser.discord_id, 
       total_time: 0, 
-      daily_times: {} 
+      daily_times: {},
+      role: 'user'
     };
     res.json([userVoiceData]);
   }
@@ -453,9 +481,9 @@ function debounceSaveUserVoiceData(userVoiceData) {
   }, DEBOUNCE_DELAY));
 }
 
-// Check if a User is an Admin
+// Check if a User is an Admin (for legacy purposes)
 function isAdmin(discordId) {
-  const adminIds = process.env.ADMIN_IDS.split(',').map(id => id.trim());
+  const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
   return adminIds.includes(discordId);
 }
 
@@ -491,11 +519,9 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   const today = getLondonDateISO();
 
   if (newState.channelId && !oldState.channelId) {
-    // User joined a voice channel
     userVoiceData.join_time = now.getTime();
     debounceSaveUserVoiceData(userVoiceData);
   } else if (!newState.channelId && oldState.channelId) {
-    // User left a voice channel
     if (userVoiceData.join_time) {
       const leaveTime = now.getTime();
       const timeSpent = Math.floor((leaveTime - userVoiceData.join_time) / 1000);
