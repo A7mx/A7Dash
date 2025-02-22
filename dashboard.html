@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A7 Dashboard</title>
+    <title>Company Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -197,6 +197,9 @@
             text-align: center;
             transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         body.dark-mode .user-card {
             border-color: #4b5e67;
@@ -206,12 +209,26 @@
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
-        .user-card img {
+        .user-card .avatar-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .user-card .avatar-container img {
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            margin-bottom: 1rem;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .user-card .avatar-container span {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #34495e;
+        }
+        body.dark-mode .user-card .avatar-container span {
+            color: #d1d8e0;
         }
         .user-card .icons {
             position: absolute;
@@ -467,6 +484,23 @@
             outline: none;
             box-shadow: 0 0 8px rgba(0, 180, 216, 0.3);
         }
+        .website-admin {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #ff0000;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .discord-role {
+            font-size: 0.9rem;
+            align-self: flex-end;
+            margin-top: 0.5rem;
+        }
+        .discord-role.coadmin {
+            color: #800080;
+        }
     </style>
 </head>
 <body>
@@ -594,10 +628,10 @@
         const token = localStorage.getItem('token');
         let currentUser;
         let timerInterval;
+        let cachedVoiceData = null;
 
         function getLondonDateISO() {
             const now = new Date();
-            // For testing, simulate 01:06 GMT on 22/02/2025
             now.setUTCFullYear(2025, 1, 22);
             now.setUTCHours(1, 6, 0, 0);
             const londonTime = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
@@ -638,16 +672,27 @@
                     const is2faVerified = localStorage.getItem(`2fa_verified_${currentUser.discord_id}`);
                     const isInitialLogin = !localStorage.getItem('isLoggedIn');
                     if (!is2faVerified && isInitialLogin) {
-                        startTwoFactor();
+                        await startTwoFactor();
                     } else {
                         localStorage.setItem('isLoggedIn', 'true');
                     }
+                    await preloadVoiceData();
                 }
                 await fetchDailyTime();
                 showSection('profile');
             } catch (error) {
-                console.error('Load user data error:', error.message);
                 window.location.href = '/';
+            }
+        }
+
+        async function preloadVoiceData() {
+            try {
+                const response = await fetch('/api/admin/voice-data', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (!response.ok) throw new Error('Failed to preload voice data');
+                cachedVoiceData = await response.json();
+            } catch (error) {
             }
         }
 
@@ -682,7 +727,6 @@
                 document.getElementById('selectedDate').textContent = date;
                 document.getElementById('monthlyTime').textContent = formatTime(calculateMonthlyTime(data.dailyTimes));
             } catch (error) {
-                console.error('Fetch daily time error:', error.message);
                 document.getElementById('dailyTime').textContent = '00:00:00';
                 document.getElementById('totalTime').textContent = '00:00:00';
                 document.getElementById('monthlyTime').textContent = '00:00:00';
@@ -701,7 +745,7 @@
                 const allUsers = await response.json();
 
                 const roleFilter = document.getElementById('userRoleFilter').value;
-                const filteredUsers = roleFilter === 'all' ? allUsers : allUsers.filter(user => user.role === roleFilter);
+                const filteredUsers = roleFilter === 'all' ? allUsers : allUsers.filter(user => user.discordRole === roleFilter);
 
                 const cards = document.getElementById('userCards');
                 cards.innerHTML = '';
@@ -714,11 +758,16 @@
                 filteredUsers.forEach(user => {
                     const card = document.createElement('div');
                     card.className = 'user-card';
+                    const discordRoleClass = user.discordRole === 'coadmin' ? 'coadmin' : '';
                     card.innerHTML = `
-                        <img src="${user.avatar}" alt="${user.nickname}">
-                        <p>${user.nickname} (ID: ${user.discord_id})</p>
+                        ${user.isWebsiteAdmin ? '<span class="website-admin">ADMIN</span>' : ''}
+                        <div class="avatar-container">
+                            <img src="${user.avatar}" alt="${user.nickname}">
+                            <span>${user.nickname}</span>
+                        </div>
+                        <p>ID: ${user.discord_id}</p>
                         <p>Username: ${user.username}</p>
-                        <p>Role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
+                        <span class="discord-role ${discordRoleClass}">Discord ${user.discordRole.charAt(0).toUpperCase() + user.discordRole.slice(1)}</span>
                         <div class="icons">
                             <svg class="icon time-icon" onclick="showUserTime('${user.discord_id}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
@@ -806,7 +855,7 @@
             }
         }
 
-        async function fetchUserDailyTime(discardId) {
+        async function fetchUserDailyTime(discordId) {
             const date = document.getElementById(`userTimePicker_${discordId}`).value;
             try {
                 const response = await fetch(`/api/user/voice-time?date=${date}&discordId=${discordId}`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -817,7 +866,6 @@
                     ${date} ⏳
                 `;
             } catch (error) {
-                console.error('Error fetching user daily time:', error.message);
             }
         }
 
@@ -915,14 +963,18 @@
                 const registeredUsers = await allUsersResponse.json();
                 const registeredIds = new Set(registeredUsers.map(user => user.discord_id));
 
-                const voiceResponse = await fetch('/api/admin/voice-data', { 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                });
-                if (!voiceResponse.ok) throw new Error('Failed to fetch voice data');
-                const voiceData = await voiceResponse.json();
+                let voiceData = cachedVoiceData;
+                if (!voiceData) {
+                    const voiceResponse = await fetch('/api/admin/voice-data', { 
+                        headers: { 'Authorization': `Bearer ${token}` } 
+                    });
+                    if (!voiceResponse.ok) throw new Error('Failed to fetch voice data');
+                    voiceData = await voiceResponse.json();
+                    cachedVoiceData = voiceData;
+                }
 
                 const roleFilter = document.getElementById('timeRoleFilter').value;
-                const filteredVoiceData = roleFilter === 'all' ? voiceData : voiceData.filter(data => data.role === roleFilter);
+                const filteredVoiceData = roleFilter === 'all' ? voiceData : voiceData.filter(data => data.discordRole === roleFilter);
                 const unregisteredVoiceUsers = filteredVoiceData.filter(user => !registeredIds.has(user.discord_id));
                 unregisteredVoiceUsers.sort((a, b) => (b.total_time || 0) - (a.total_time || 0));
 
@@ -939,10 +991,15 @@
                     const dayTime = user.daily_times && user.daily_times[selectedDate] ? user.daily_times[selectedDate] : 0;
                     const div = document.createElement('div');
                     div.className = 'user-card';
+                    const discordRoleClass = user.discordRole === 'coadmin' ? 'coadmin' : '';
                     div.innerHTML = `
-                        <img src="${user.avatar || 'https://via.placeholder.com/100'}" alt="${user.nickname || 'Unknown'}">
-                        <p>${user.nickname || 'Unknown'} (ID: ${user.discord_id})</p>
-                        <p>Role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
+                        ${user.isWebsiteAdmin ? '<span class="website-admin">ADMIN</span>' : ''}
+                        <div class="avatar-container">
+                            <img src="${user.avatar || 'https://via.placeholder.com/100'}" alt="${user.nickname || 'Unknown'}">
+                            <span>${user.nickname || 'Unknown'}</span>
+                        </div>
+                        <p>ID: ${user.discord_id}</p>
+                        <span class="discord-role ${discordRoleClass}">Discord ${user.discordRole.charAt(0).toUpperCase() + user.discordRole.slice(1)}</span>
                         <div class="icons">
                             <svg class="icon time-icon" onclick="showUserTime('${user.discord_id}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
@@ -955,7 +1012,7 @@
                     list.appendChild(div);
                 });
             } catch (error) {
-                errorElement.textContent = `Failed to load time data: ${error.message}`;
+                errorElement.textContent = 'Failed to load time data: ' + error.message;
             }
         }
 
@@ -963,7 +1020,7 @@
             const search = document.getElementById('userSearch').value.toLowerCase();
             const cards = document.querySelectorAll('#userCards .user-card');
             cards.forEach(card => {
-                const name = card.querySelector('p').textContent.toLowerCase();
+                const name = card.querySelector('.avatar-container span').textContent.toLowerCase();
                 card.style.display = name.includes(search) ? 'block' : 'none';
             });
         }
@@ -972,7 +1029,7 @@
             const search = document.getElementById('timeSearch').value.toLowerCase();
             const cards = document.querySelectorAll('#timeList .user-card');
             cards.forEach(card => {
-                const name = card.querySelector('p').textContent.toLowerCase();
+                const name = card.querySelector('.avatar-container span').textContent.toLowerCase();
                 card.style.display = name.includes(search) ? 'block' : 'none';
             });
         }
@@ -1027,7 +1084,7 @@
             fetchDailyTime();
         }
 
-        function startTwoFactor() {
+        async function startTwoFactor() {
             const modal = document.getElementById('twoFactorModal');
             const timerElement = document.getElementById('timer');
             const mainContainer = document.getElementById('mainContainer');
@@ -1049,18 +1106,18 @@
                 }
             }, 1000);
 
-            fetch('/api/auth/request-2fa', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(response => {
+            try {
+                const response = await fetch('/api/auth/request-2fa', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 if (!response.ok) {
-                    return response.text().then(text => { throw new Error(`Request failed: ${text}`); });
+                    const text = await response.text();
+                    throw new Error(`Request failed: ${text}`);
                 }
-                return response.json();
-            }).catch(error => {
-                console.error('Failed to request 2FA:', error.message);
+            } catch (error) {
                 failTwoFactor('Failed to send 2FA code: ' + error.message);
-            });
+            }
         }
 
         async function verifyTwoFactor() {
@@ -1081,14 +1138,12 @@
                     const text = await response.text();
                     throw new Error(`Verify failed: ${text}`);
                 }
-                const data = await response.json();
                 clearInterval(timerInterval);
                 mainContainer.classList.remove('blur');
                 document.getElementById('twoFactorModal').style.display = 'none';
                 localStorage.setItem(`2fa_verified_${currentUser.discord_id}`, 'true');
                 localStorage.setItem('isLoggedIn', 'true');
             } catch (error) {
-                console.error('2FA verification error:', error.message);
                 errorMessage.textContent = error.message;
                 errorMessage.style.display = 'block';
             }
@@ -1116,18 +1171,18 @@
                 }
             }, 1000);
 
-            fetch('/api/auth/request-2fa', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(response => {
+            try {
+                const response = await fetch('/api/auth/request-2fa', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 if (!response.ok) {
-                    return response.text().then(text => { throw new Error(`Resend failed: ${text}`); });
+                    const text = await response.text();
+                    throw new Error(`Resend failed: ${text}`);
                 }
-                return response.json();
-            }).catch(error => {
-                console.error('Failed to resend 2FA:', error.message);
+            } catch (error) {
                 failTwoFactor('Failed to resend 2FA code: ' + error.message);
-            });
+            }
         }
 
         function failTwoFactor(message) {
@@ -1154,4 +1209,4 @@
         }
     </script>
 </body>
-</html>
+</html> 
