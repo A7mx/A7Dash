@@ -62,7 +62,7 @@ function getLondonTime() {
   now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
   now.setUTCHours(1, 6, 0, 0); // 01:06 GMT base
   now.setUTCSeconds(now.getUTCSeconds() + simulatedTimeOffset); // Increment time
-  simulatedTimeOffset += 5; // Add 5 seconds per event for testing
+  simulatedTimeOffset += 5; // Always increase
   return now;
 }
 
@@ -506,14 +506,14 @@ client.once('ready', async () => {
   console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
 });
 
-// Handle Voice State Updates (Silent)
+// Handle Voice State Updates (Fixed to prevent negative time)
 client.on('voiceStateUpdate', (oldState, newState) => {
   const user = newState.member?.user;
   if (!user) return;
 
   let userVoiceData = voiceDataCache.get(user.id) || {
     discord_id: user.id,
-    nickname: newState.member?.nickname || user.username, // Use server nickname if available
+    nickname: newState.member?.nickname || user.username,
     avatar: user.avatarURL()?.toString() || 'https://via.placeholder.com/100',
     total_time: 0,
     daily_times: {},
@@ -530,10 +530,14 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     if (userVoiceData.join_time) {
       const leaveTime = now.getTime();
       const timeSpent = Math.floor((leaveTime - userVoiceData.join_time) / 1000);
-      userVoiceData.total_time += timeSpent;
-      userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + timeSpent;
+      const safeTimeSpent = Math.max(0, timeSpent); // Prevent negative time
+      userVoiceData.total_time += safeTimeSpent;
+      userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + safeTimeSpent;
       userVoiceData.join_time = null;
       debounceSaveUserVoiceData(userVoiceData);
+      if (timeSpent < 0) {
+        console.error(`Negative timeSpent detected for ${user.id}: ${timeSpent} seconds (corrected to 0)`);
+      }
     }
   }
 });
