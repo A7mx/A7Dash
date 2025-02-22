@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A7 Dashboard</title>
+    <title>Company Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -446,6 +446,27 @@
             color: #e74c3c;
             margin-bottom: 1rem;
         }
+        .role-filter {
+            width: 200px;
+            padding: 0.75rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #bdc3c7;
+            border-radius: 8px;
+            background: #fff;
+            font-size: 1rem;
+            color: #34495e;
+            transition: border-color 0.3s ease, background 0.3s, box-shadow 0.3s;
+        }
+        body.dark-mode .role-filter {
+            border-color: #4b5e67;
+            background: #353b48;
+            color: #d1d8e0;
+        }
+        .role-filter:focus {
+            border-color: #00b4d8;
+            outline: none;
+            box-shadow: 0 0 8px rgba(0, 180, 216, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -508,6 +529,13 @@
 
         <div id="manage-users" class="section">
             <h2>Manage Users 👥</h2>
+            <select id="userRoleFilter" class="role-filter" onchange="loadAllUsers()">
+                <option value="all">All Roles</option>
+                <option value="superadmin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="coadmin">Co-Admin</option>
+                <option value="user">User</option>
+            </select>
             <input type="text" class="search" id="userSearch" placeholder="Search users..." oninput="searchUsers()">
             <div class="user-cards" id="userCards"></div>
             <p id="manageUsersError" class="error-message"></p>
@@ -515,6 +543,13 @@
 
         <div id="manage-time" class="section">
             <h2>Manage Time ⏰</h2>
+            <select id="timeRoleFilter" class="role-filter" onchange="loadTimeList()">
+                <option value="all">All Roles</option>
+                <option value="superadmin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="coadmin">Co-Admin</option>
+                <option value="user">User</option>
+            </select>
             <input type="text" class="search" id="timeSearch" placeholder="Search users..." oninput="searchTime()">
             <div class="calendar">
                 <input type="date" id="timeDatePicker" onchange="loadTimeList()">
@@ -560,13 +595,11 @@
         let currentUser;
         let timerInterval;
 
-        // Helper function to get Europe/London time
         function getLondonDateISO() {
             const now = new Date();
             // For testing, simulate 01:06 GMT on 22/02/2025
-            // Comment out the lines below for production
-            now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
-            now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
+            now.setUTCFullYear(2025, 1, 22);
+            now.setUTCHours(1, 6, 0, 0);
             const londonTime = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
             const [datePart] = londonTime.split(', ');
             const [day, month, year] = datePart.split('/');
@@ -667,21 +700,25 @@
                 if (!response.ok) throw new Error('Failed to fetch users');
                 const allUsers = await response.json();
 
+                const roleFilter = document.getElementById('userRoleFilter').value;
+                const filteredUsers = roleFilter === 'all' ? allUsers : allUsers.filter(user => user.role === roleFilter);
+
                 const cards = document.getElementById('userCards');
                 cards.innerHTML = '';
 
-                if (allUsers.length === 0) {
-                    errorElement.textContent = 'No registered users found.';
+                if (filteredUsers.length === 0) {
+                    errorElement.textContent = 'No users found for this role.';
                     return;
                 }
 
-                allUsers.forEach(user => {
+                filteredUsers.forEach(user => {
                     const card = document.createElement('div');
                     card.className = 'user-card';
                     card.innerHTML = `
                         <img src="${user.avatar}" alt="${user.nickname}">
                         <p>${user.nickname} (ID: ${user.discord_id})</p>
                         <p>Username: ${user.username}</p>
+                        <p>Role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
                         <div class="icons">
                             <svg class="icon time-icon" onclick="showUserTime('${user.discord_id}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
@@ -769,7 +806,7 @@
             }
         }
 
-        async function fetchUserDailyTime(discordId) {
+        async function fetchUserDailyTime(discardId) {
             const date = document.getElementById(`userTimePicker_${discordId}`).value;
             try {
                 const response = await fetch(`/api/user/voice-time?date=${date}&discordId=${discordId}`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -829,17 +866,10 @@
         }
 
         async function registerUser(discordId, nickname) {
-            console.log(`Register button clicked for ${discordId}`);
             const username = prompt('Enter username for the new user:', nickname.toLowerCase().replace(/\s+/g, ''));
-            if (!username) {
-                console.log('Username prompt cancelled');
-                return;
-            }
+            if (!username) return;
             const password = prompt('Enter password for the new user:');
-            if (!password) {
-                console.log('Password prompt cancelled');
-                return;
-            }
+            if (!password) return;
 
             try {
                 const response = await fetch('/api/admin/update-user', {
@@ -848,21 +878,14 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`,
                     },
-                    body: JSON.stringify({ 
-                        discord_id: discordId, 
-                        username: username, 
-                        nickname: nickname, 
-                        password: password 
-                    }),
+                    body: JSON.stringify({ discord_id: discordId, username, nickname, password }),
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.message || 'Failed to register user');
-                console.log(`Registration successful for ${discordId}`);
                 alert('User registered successfully! 🎉');
                 loadTimeList();
                 loadAllUsers();
             } catch (error) {
-                console.error(`Registration failed for ${discordId}:`, error.message);
                 alert('Failed to register user: ' + error.message);
             }
         }
@@ -873,9 +896,8 @@
 
         function calculateMonthlyTime(dailyTimes) {
             const now = new Date();
-            // For testing, simulate 01:06 GMT on 22/02/2025
-            now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
-            now.setUTCHours(1, 6, 0, 0); // 01:06 GMT
+            now.setUTCFullYear(2025, 1, 22);
+            now.setUTCHours(1, 6, 0, 0);
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
             return Object.entries(dailyTimes)
                 .filter(([date]) => date >= monthStart)
@@ -899,7 +921,9 @@
                 if (!voiceResponse.ok) throw new Error('Failed to fetch voice data');
                 const voiceData = await voiceResponse.json();
 
-                const unregisteredVoiceUsers = voiceData.filter(user => !registeredIds.has(user.discord_id));
+                const roleFilter = document.getElementById('timeRoleFilter').value;
+                const filteredVoiceData = roleFilter === 'all' ? voiceData : voiceData.filter(data => data.role === roleFilter);
+                const unregisteredVoiceUsers = filteredVoiceData.filter(user => !registeredIds.has(user.discord_id));
                 unregisteredVoiceUsers.sort((a, b) => (b.total_time || 0) - (a.total_time || 0));
 
                 const selectedDate = document.getElementById('timeDatePicker').value || getLondonDateISO();
@@ -907,7 +931,7 @@
                 list.innerHTML = '';
 
                 if (unregisteredVoiceUsers.length === 0) {
-                    list.innerHTML = '<p>No unregistered users with voice time found. 😕</p>';
+                    list.innerHTML = '<p>No unregistered users with voice time found for this role. 😕</p>';
                     return;
                 }
 
@@ -918,6 +942,7 @@
                     div.innerHTML = `
                         <img src="${user.avatar || 'https://via.placeholder.com/100'}" alt="${user.nickname || 'Unknown'}">
                         <p>${user.nickname || 'Unknown'} (ID: ${user.discord_id})</p>
+                        <p>Role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
                         <div class="icons">
                             <svg class="icon time-icon" onclick="showUserTime('${user.discord_id}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
