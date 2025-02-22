@@ -30,9 +30,24 @@
         body.dark-mode .navbar {
             background: linear-gradient(90deg, #1a1d21, #2d3436);
         }
+        .navbar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
         .logo {
             height: 50px;
             filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
+        .navbar-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #ecf0f1;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: color 0.3s;
+        }
+        body.dark-mode .navbar-title {
+            color: #d1d8e0;
         }
         .user-info {
             position: relative;
@@ -519,7 +534,10 @@
 </head>
 <body>
     <div class="navbar">
-        <img src="logo.png" alt="Company Logo" class="logo">
+        <div class="navbar-left">
+            <img src="logo.png" alt="Company Logo" class="logo">
+            <span class="navbar-title">A7 Dashboard</span>
+        </div>
         <div class="user-info" id="userInfo">
             <svg id="themeToggle" class="theme-toggle" onclick="toggleDarkMode()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
