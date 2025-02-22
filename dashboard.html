@@ -94,6 +94,15 @@
         body.dark-mode .dropdown button:hover {
             background-color: #3b444b;
         }
+        .top-list-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .top-list-dropdown .dropdown {
+            top: 100%;
+            left: 0;
+            min-width: 150px;
+        }
         .container {
             max-width: 1280px;
             margin: 2rem auto;
@@ -184,12 +193,12 @@
         body.dark-mode h2 {
             color: #d1d8e0;
         }
-        .user-cards {
+        .user-cards, .top-list {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 1.5rem;
         }
-        .user-card {
+        .user-card, .top-list-item {
             border: 1px solid #e0e4e8;
             padding: 1.5rem;
             border-radius: 12px;
@@ -201,33 +210,38 @@
             flex-direction: column;
             justify-content: space-between;
         }
-        body.dark-mode .user-card {
+        body.dark-mode .user-card, 
+        body.dark-mode .top-list-item {
             border-color: #4b5e67;
             background: #2d3436;
         }
-        .user-card:hover {
+        .user-card:hover, .top-list-item:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
-        .user-card .avatar-container {
+        .user-card .avatar-container, 
+        .top-list-item .avatar-container {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 1rem;
             margin-bottom: 1rem;
         }
-        .user-card .avatar-container img {
+        .user-card .avatar-container img, 
+        .top-list-item .avatar-container img {
             width: 80px;
             height: 80px;
             border-radius: 50%;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
-        .user-card .avatar-container span {
+        .user-card .avatar-container span, 
+        .top-list-item .avatar-container span {
             font-size: 1.1rem;
             font-weight: 500;
             color: #34495e;
         }
-        body.dark-mode .user-card .avatar-container span {
+        body.dark-mode .user-card .avatar-container span, 
+        body.dark-mode .top-list-item .avatar-container span {
             color: #d1d8e0;
         }
         .user-card .icons {
@@ -520,6 +534,14 @@
     <div class="container" id="mainContainer">
         <div class="buttons" id="navButtons">
             <button onclick="showSection('profile')">Profile 🌟</button>
+            <div class="top-list-dropdown">
+                <button id="topListBtn" onclick="toggleTopListDropdown()">Top List 🏆</button>
+                <div class="dropdown" id="topListDropdown">
+                    <button onclick="showTopList('week')">Top Week</button>
+                    <button onclick="showTopList('month')">Top Month</button>
+                    <button onclick="showTopList('all')">Top All Time</button>
+                </div>
+            </div>
             <button onclick="showSection('manage-users')" id="manageUsersBtn" class="hidden">Manage Users 👥</button>
             <button onclick="showSection('manage-time')" id="manageTimeBtn" class="hidden">Manage Time ⏰</button>
             <button onclick="showSection('change-password')">Change Password 🔑</button>
@@ -559,6 +581,13 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div id="top-list" class="section">
+            <h2 id="topListTitle">Top List</h2>
+            <input type="text" class="search" id="topListSearch" placeholder="Search users..." oninput="searchTopList()">
+            <div class="top-list" id="topListCards"></div>
+            <p id="topListError" class="error-message"></p>
         </div>
 
         <div id="manage-users" class="section">
@@ -676,8 +705,8 @@
                     } else {
                         localStorage.setItem('isLoggedIn', 'true');
                     }
-                    await preloadVoiceData();
                 }
+                await preloadVoiceData();
                 await fetchDailyTime();
                 showSection('profile');
             } catch (error) {
@@ -687,7 +716,7 @@
 
         async function preloadVoiceData() {
             try {
-                const response = await fetch('/api/admin/voice-data', { 
+                const response = await fetch('/api/voice-data', { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
                 if (!response.ok) throw new Error('Failed to preload voice data');
@@ -705,6 +734,9 @@
 
         document.addEventListener('click', (e) => {
             if (!userInfo.contains(e.target)) userDropdown.classList.remove('active');
+            if (!document.getElementById('topListDropdown').contains(e.target) && !e.target.matches('#topListBtn')) {
+                document.getElementById('topListDropdown').classList.remove('active');
+            }
         });
 
         document.addEventListener('click', (e) => {
@@ -732,6 +764,92 @@
                 document.getElementById('monthlyTime').textContent = '00:00:00';
                 document.getElementById('selectedDate').textContent = getLondonDateISO();
             }
+        }
+
+        function toggleTopListDropdown() {
+            document.getElementById('topListDropdown').classList.toggle('active');
+        }
+
+        async function showTopList(period) {
+            const errorElement = document.getElementById('topListError');
+            errorElement.textContent = '';
+            try {
+                let voiceData = cachedVoiceData;
+                if (!voiceData) {
+                    const response = await fetch('/api/voice-data', { 
+                        headers: { 'Authorization': `Bearer ${token}` } 
+                    });
+                    if (!response.ok) throw new Error('Failed to fetch voice data');
+                    voiceData = await response.json();
+                    cachedVoiceData = voiceData;
+                }
+
+                const now = new Date();
+                now.setUTCFullYear(2025, 1, 22);
+                now.setUTCHours(1, 6, 0, 0);
+                let sortedUsers;
+
+                if (period === 'week') {
+                    const weekStart = new Date(now);
+                    weekStart.setUTCDate(now.getUTCDate() - now.getUTCDay());
+                    const weekStartISO = weekStart.toISOString().split('T')[0];
+                    sortedUsers = voiceData.map(user => ({
+                        nickname: user.nickname,
+                        avatar: user.avatar || 'https://via.placeholder.com/100',
+                        time: Object.entries(user.daily_times || {})
+                            .filter(([date]) => date >= weekStartISO)
+                            .reduce((sum, [, time]) => sum + time, 0)
+                    })).sort((a, b) => b.time - a.time);
+                    document.getElementById('topListTitle').textContent = 'Top Week';
+                } else if (period === 'month') {
+                    const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1).toISOString().split('T')[0];
+                    sortedUsers = voiceData.map(user => ({
+                        nickname: user.nickname,
+                        avatar: user.avatar || 'https://via.placeholder.com/100',
+                        time: Object.entries(user.daily_times || {})
+                            .filter(([date]) => date >= monthStart)
+                            .reduce((sum, [, time]) => sum + time, 0)
+                    })).sort((a, b) => b.time - a.time);
+                    document.getElementById('topListTitle').textContent = 'Top Month';
+                } else { // all time
+                    sortedUsers = voiceData.map(user => ({
+                        nickname: user.nickname,
+                        avatar: user.avatar || 'https://via.placeholder.com/100',
+                        time: user.total_time || 0
+                    })).sort((a, b) => b.time - a.time);
+                    document.getElementById('topListTitle').textContent = 'Top All Time';
+                }
+
+                const list = document.getElementById('topListCards');
+                list.innerHTML = '';
+
+                sortedUsers.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'top-list-item';
+                    div.innerHTML = `
+                        <div class="avatar-container">
+                            <img src="${user.avatar}" alt="${user.nickname}">
+                            <span>${user.nickname}</span>
+                        </div>
+                        <p>Time: ${formatTime(user.time)}</p>
+                    `;
+                    list.appendChild(div);
+                });
+
+                showSection('top-list');
+                document.getElementById('topListDropdown').classList.remove('active');
+            } catch (error) {
+                errorElement.textContent = 'Failed to load top list: ' + error.message;
+            }
+        }
+
+        function searchTopList() {
+            const search = document.getElementById('topListSearch').value.toLowerCase();
+            const cards = document.querySelectorAll('#topListCards .top-list-item');
+            cards.forEach(card => {
+                const name = card.querySelector('.avatar-container span').textContent.toLowerCase();
+                card.style.display = name.includes(search) ? 'block' : 'none';
+            });
         }
 
         async function loadAllUsers() {
@@ -946,7 +1064,7 @@
             const now = new Date();
             now.setUTCFullYear(2025, 1, 22);
             now.setUTCHours(1, 6, 0, 0);
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1).toISOString().split('T')[0];
             return Object.entries(dailyTimes)
                 .filter(([date]) => date >= monthStart)
                 .reduce((sum, [, time]) => sum + time, 0);
@@ -965,7 +1083,7 @@
 
                 let voiceData = cachedVoiceData;
                 if (!voiceData) {
-                    const voiceResponse = await fetch('/api/admin/voice-data', { 
+                    const voiceResponse = await fetch('/api/voice-data', { 
                         headers: { 'Authorization': `Bearer ${token}` } 
                     });
                     if (!voiceResponse.ok) throw new Error('Failed to fetch voice data');
@@ -1209,4 +1327,4 @@
         }
     </script>
 </body>
-</html> 
+</html>
