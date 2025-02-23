@@ -3,6 +3,7 @@ const express = require('express');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { initializeApp } = require('firebase/app');
 const { getFirestore, doc, setDoc, getDoc, collection, getDocs } = require('firebase/firestore');
+const WebSocket = require('ws');
 const app = express();
 const path = require('path');
 
@@ -36,6 +37,9 @@ const client = new Client({
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+// WebSocket Server
+const wss = new WebSocket.Server({ port: 8080 });
+
 // Temporary storage for 2FA codes
 const twoFactorCodes = new Map();
 
@@ -45,17 +49,15 @@ let lastUserFetch = 0;
 const USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const voiceDataCache = new Map();
 let lastVoiceDataFetch = 0;
-const VOICE_CACHE_DURATION = 1 * 60 * 1000; // 1 minute
+const VOICE_CACHE_DURATION = 30 * 1000; // 30s for faster updates
 
 // Debounce timer for batched Firestore updates
 const debounceTimers = new Map();
-const DEBOUNCE_DELAY = 5000; // 5 seconds
+const DEBOUNCE_DELAY = 2000; // 2s for faster persistence
 
-// Helper function to get Israel time (Asia/Jerusalem) as a Date object
+// Helper function to get Israel time (Asia/Jerusalem)
 function getIsraelTime() {
-  const now = new Date();
-  console.log(`Current Israel Time: ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
-  return now;
+  return new Date();
 }
 
 function getIsraelDateISO() {
@@ -63,21 +65,44 @@ function getIsraelDateISO() {
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
   const day = String(now.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`; // e.g., "2025-02-23"
+  return `${year}-${month}-${day}`;
 }
 
 // Preload voice data cache on startup
 async function preloadVoiceDataCache() {
   try {
     const querySnapshot = await getDocs(collection(db, 'voice_data'));
+    voiceDataCache.clear();
     querySnapshot.forEach((doc) => {
-      voiceDataCache.set(doc.id, { discord_id: doc.id, ...doc.data() });
+      const data = doc.data();
+      voiceDataCache.set(doc.id, {
+        discord_id: doc.id,
+        nickname: data.nickname || '',
+        avatar: data.avatar || 'https://via.placeholder.com/100',
+        total_time: data.total_time || 0,
+        daily_times: data.daily_times || {},
+        join_time: null, // Reset on startup
+        saved_total_time: data.total_time || 0,
+        saved_daily_times: data.daily_times || {},
+        last_update_time: null // Added to track last update
+      });
     });
     lastVoiceDataFetch = Date.now();
     console.log('Voice data cache preloaded');
+    broadcastVoiceDataUpdate();
   } catch (error) {
     console.error('Error preloading voice data:', error.message);
   }
+}
+
+// Broadcast voice data updates to all WebSocket clients
+function broadcastVoiceDataUpdate() {
+  const voiceData = Array.from(voiceDataCache.values());
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'voice_update', data: voiceData }));
+    }
+  });
 }
 
 // Serve Login Page
@@ -125,7 +150,7 @@ app.post('/api/auth/request-2fa', async (req, res) => {
     res.json({ message: '2FA code sent' });
   } catch (error) {
     console.error(`Failed to send 2FA code to ${discordId}:`, error.message);
-    res.status(500).json({ message: 'Failed to send 2FA code', error: error.message });
+    res.status(500).json({ message: 'Failed to send 2FA code' });
   }
 });
 
@@ -164,9 +189,7 @@ app.get('/api/user/me', async (req, res) => {
   try {
     const member = await guild.members.fetch(user.discord_id);
     serverNickname = member.nickname || member.user.username;
-  } catch (error) {
-    // Keep stored nickname if fetch fails
-  }
+  } catch (error) {}
 
   res.json({ ...user, nickname: serverNickname });
 });
@@ -190,14 +213,24 @@ app.get('/api/user/voice-time', async (req, res) => {
     }
 
     const data = docSnap.data();
-    voiceDataCache.set(discordId, { discord_id: discordId, ...data });
+    voiceDataCache.set(discordId, { 
+      discord_id: discordId, 
+      nickname: data.nickname || '',
+      avatar: data.avatar || 'https://via.placeholder.com/100',
+      total_time: data.total_time || 0,
+      daily_times: data.daily_times || {},
+      join_time: null,
+      saved_total_time: data.total_time || 0,
+      saved_daily_times: data.daily_times || {},
+      last_update_time: null
+    });
     const dailyTimes = data.daily_times || {};
     const dailyTime = dailyTimes[date] || 0;
     const totalTime = data.total_time || 0;
     res.json({ voiceTime: formatTime(dailyTime), totalTime: formatTime(totalTime), dailyTimes, nickname: data.nickname || '' });
   } catch (error) {
     console.error('Error fetching voice time:', error.message);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -212,7 +245,7 @@ app.get('/api/admin/all-users', async (req, res) => {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
-  const voiceData = await fetchVoiceDataFromFirestore();
+  const voiceData = Array.from(voiceDataCache.values());
   const guild = client.guilds.cache.first();
   const allUsers = await Promise.all(registeredUsers.map(async (user) => {
     let discordRole = 'user';
@@ -224,16 +257,16 @@ app.get('/api/admin/all-users', async (req, res) => {
       else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
       else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
       serverNickname = member.nickname || member.user.username;
-    } catch (error) {
-      // User might not be in guild
-    }
+    } catch (error) {}
 
-    const userVoiceData = voiceData.find(data => data.discord_id === user.discord_id);
+    const userVoiceData = voiceData.find(data => data.discord_id === user.discord_id) || {
+      total_time: 0
+    };
     return {
       discord_id: user.discord_id,
       nickname: serverNickname,
       avatar: user.avatar,
-      total_time: userVoiceData?.total_time || 0,
+      total_time: userVoiceData.total_time || 0,
       registered: true,
       isWebsiteAdmin: isAdmin(user.discord_id),
       discordRole,
@@ -245,7 +278,7 @@ app.get('/api/admin/all-users', async (req, res) => {
   res.json(allUsers);
 });
 
-// API Route: Get Voice Data (Public - Accessible to All Users)
+// API Route: Get Voice Data (Initial Load)
 app.get('/api/voice-data', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
@@ -257,20 +290,40 @@ app.get('/api/voice-data', async (req, res) => {
   const guild = client.guilds.cache.first();
   let voiceData = Array.from(voiceDataCache.values());
 
-  const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
-    let discordRole = 'user';
-    let serverNickname = data.nickname;
-    try {
-      const member = await guild.members.fetch(data.discord_id);
+  // Include all guild members
+  try {
+    const members = await guild.members.fetch();
+    members.forEach(member => {
+      if (!voiceDataCache.has(member.id)) {
+        voiceDataCache.set(member.id, {
+          discord_id: member.id,
+          nickname: member.nickname || member.user.username,
+          avatar: member.user.avatarURL() || 'https://via.placeholder.com/100',
+          total_time: 0,
+          daily_times: {},
+          join_time: null,
+          saved_total_time: 0,
+          saved_daily_times: {},
+          discordRole: 'user',
+          last_update_time: null
+        });
+      }
+      const userData = voiceDataCache.get(member.id);
       const roles = member.roles.cache.map(r => r.id);
-      if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
-      else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
-      else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
-      serverNickname = member.nickname || member.user.username;
-    } catch (error) {
-      // User might not be in guild
-    }
-    return { ...data, nickname: serverNickname, isWebsiteAdmin: isAdmin(data.discord_id), discordRole };
+      if (roles.includes(process.env.SUPERADMIN_ROLE)) userData.discordRole = 'superadmin';
+      else if (roles.includes(process.env.ADMIN_ROLE)) userData.discordRole = 'admin';
+      else if (roles.includes(process.env.COADMIN_ROLE)) userData.discordRole = 'coadmin';
+      else userData.discordRole = 'user';
+      voiceDataCache.set(member.id, userData);
+    });
+    voiceData = Array.from(voiceDataCache.values());
+  } catch (error) {
+    console.error('Error fetching guild members:', error.message);
+  }
+
+  const voiceDataWithRoles = voiceData.map(data => ({
+    ...data,
+    isWebsiteAdmin: isAdmin(data.discord_id)
   }));
   res.json(voiceDataWithRoles);
 });
@@ -334,7 +387,7 @@ app.post('/api/admin/update-user', async (req, res) => {
     await updateSingleUserInDiscord(userToUpdate);
     res.json({ message: 'User updated or registered successfully!' });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update/register user', error: error.message });
+    res.status(500).json({ message: 'Failed to update/register user' });
   }
 });
 
@@ -365,7 +418,7 @@ app.post('/api/admin/delete-user', async (req, res) => {
     lastUserFetch = 0;
     res.json({ message: 'User registration deleted successfully!' });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete user', error: error.message });
+    res.status(500).json({ message: 'Failed to delete user' });
   }
 });
 
@@ -405,7 +458,7 @@ async function fetchUsersFromDiscord() {
   }
 }
 
-// Update Single User in Discord Channel (Handles Registration Too)
+// Update Single User in Discord Channel
 async function updateSingleUserInDiscord(user) {
   try {
     const channel = await client.channels.fetch(process.env.DATABASE_CHANNEL_ID);
@@ -431,30 +484,6 @@ async function updateSingleUserInDiscord(user) {
   }
 }
 
-// Fetch Voice Data from Firestore
-async function fetchVoiceDataFromFirestore() {
-  const now = Date.now();
-  if (voiceDataCache.size > 0 && (now - lastVoiceDataFetch) < VOICE_CACHE_DURATION) {
-    return Array.from(voiceDataCache.values());
-  }
-
-  try {
-    const querySnapshot = await getDocs(collection(db, 'voice_data'));
-    voiceDataCache.clear();
-    const voiceData = [];
-    querySnapshot.forEach((doc) => {
-      const data = { discord_id: doc.id, ...doc.data() };
-      voiceData.push(data);
-      voiceDataCache.set(doc.id, data);
-    });
-    lastVoiceDataFetch = now;
-    return voiceData;
-  } catch (error) {
-    console.error('Error fetching voice data:', error.message);
-    return [];
-  }
-}
-
 // Debounced Save or Update Voice Data to Firestore
 function debounceSaveUserVoiceData(userVoiceData) {
   const { discord_id } = userVoiceData;
@@ -468,11 +497,13 @@ function debounceSaveUserVoiceData(userVoiceData) {
       await setDoc(doc(db, 'voice_data', discord_id), {
         nickname: dataToSave.nickname,
         avatar: dataToSave.avatar,
-        total_time: dataToSave.total_time || 0,
-        daily_times: dataToSave.daily_times || {},
-        join_time: dataToSave.join_time || null
+        total_time: dataToSave.saved_total_time || 0,
+        daily_times: dataToSave.saved_daily_times || {},
+        join_time: dataToSave.join_time || null,
+        saved_total_time: dataToSave.saved_total_time || 0,
+        saved_daily_times: dataToSave.saved_daily_times || {}
       }, { merge: true });
-      console.log(`Saved voice data for ${discord_id}`);
+      console.log(`Saved voice data for ${discord_id}: Total ${formatTime(dataToSave.saved_total_time)}`);
       debounceTimers.delete(discord_id);
     } catch (error) {
       console.error('Error saving voice data:', error.message);
@@ -489,9 +520,11 @@ async function flushDebouncedUpdates() {
       await setDoc(doc(db, 'voice_data', discord_id), {
         nickname: dataToSave.nickname,
         avatar: dataToSave.avatar,
-        total_time: dataToSave.total_time || 0,
-        daily_times: dataToSave.daily_times || {},
-        join_time: dataToSave.join_time || null
+        total_time: dataToSave.saved_total_time || 0,
+        daily_times: dataToSave.saved_daily_times || {},
+        join_time: dataToSave.join_time || null,
+        saved_total_time: dataToSave.saved_total_time || 0,
+        saved_daily_times: dataToSave.saved_daily_times || {}
       }, { merge: true });
       console.log(`Flushed data for ${discord_id}`);
     }
@@ -499,7 +532,7 @@ async function flushDebouncedUpdates() {
   debounceTimers.clear();
 }
 
-// Check if a User is an Admin (Website-specific)
+// Check if a User is an Admin
 function isAdmin(discordId) {
   const adminIds = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
   return adminIds.includes(discordId);
@@ -517,7 +550,33 @@ function formatTime(seconds) {
 client.once('ready', async () => {
   await preloadVoiceDataCache();
   console.log(`Bot logged in as ${client.user.tag} on ${getIsraelTime().toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
+  setInterval(updateActiveVoiceUsers, 1000); // Update every second
 });
+
+// Update active voice users every second
+function updateActiveVoiceUsers() {
+  const now = getIsraelTime();
+  const today = getIsraelDateISO();
+
+  voiceDataCache.forEach((userVoiceData, discord_id) => {
+    if (userVoiceData.join_time) {
+      if (!userVoiceData.last_update_time) {
+        userVoiceData.last_update_time = userVoiceData.join_time;
+      }
+      const timeSinceLastUpdate = Math.floor((now.getTime() - userVoiceData.last_update_time) / 1000);
+      if (timeSinceLastUpdate >= 1) {
+        const increment = 1; // Increment by 1 second per update
+        userVoiceData.saved_total_time += increment;
+        userVoiceData.saved_daily_times[today] = (userVoiceData.saved_daily_times[today] || 0) + increment;
+        userVoiceData.total_time = userVoiceData.saved_total_time;
+        userVoiceData.daily_times[today] = userVoiceData.saved_daily_times[today];
+        userVoiceData.last_update_time = now.getTime();
+        voiceDataCache.set(discord_id, { ...userVoiceData });
+      }
+    }
+  });
+  broadcastVoiceDataUpdate();
+}
 
 // Handle Voice State Updates
 client.on('voiceStateUpdate', (oldState, newState) => {
@@ -530,31 +589,55 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     avatar: user.avatarURL()?.toString() || 'https://via.placeholder.com/100',
     total_time: 0,
     daily_times: {},
-    join_time: null
+    join_time: null,
+    saved_total_time: 0,
+    saved_daily_times: {},
+    discordRole: 'user', // Default role
+    last_update_time: null
   };
 
   const now = getIsraelTime();
   const today = getIsraelDateISO();
 
+  // User joins a voice channel from being disconnected
   if (newState.channelId && !oldState.channelId) {
-    // User joins a voice channel
-    userVoiceData.join_time = now.getTime();
-    console.log(`${user.username} joined at ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
-    debounceSaveUserVoiceData(userVoiceData);
-  } else if (!newState.channelId && oldState.channelId) {
-    // User leaves a voice channel
-    if (userVoiceData.join_time) {
-      const leaveTime = now.getTime();
-      const timeSpent = Math.floor((leaveTime - userVoiceData.join_time) / 1000);
+    if (userVoiceData.join_time && userVoiceData.last_update_time) {
+      const timeSpent = Math.floor((now.getTime() - userVoiceData.last_update_time) / 1000);
       const safeTimeSpent = Math.max(0, timeSpent);
-      userVoiceData.total_time = (userVoiceData.total_time || 0) + safeTimeSpent;
-      userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + safeTimeSpent;
-      userVoiceData.join_time = null;
-      console.log(`${user.username} left after ${safeTimeSpent} seconds on ${today}`);
+      userVoiceData.saved_total_time += safeTimeSpent;
+      userVoiceData.saved_daily_times[today] = (userVoiceData.saved_daily_times[today] || 0) + safeTimeSpent;
+    }
+    userVoiceData.join_time = now.getTime();
+    userVoiceData.last_update_time = now.getTime();
+    console.log(`${user.username} joined voice at ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
+    debounceSaveUserVoiceData(userVoiceData);
+  } 
+  // User switches channels
+  else if (newState.channelId && oldState.channelId && newState.channelId !== oldState.channelId) {
+    if (userVoiceData.join_time && userVoiceData.last_update_time) {
+      const switchTime = now.getTime();
+      const timeSpent = Math.floor((switchTime - userVoiceData.last_update_time) / 1000);
+      const safeTimeSpent = Math.max(0, timeSpent);
+      userVoiceData.saved_total_time += safeTimeSpent;
+      userVoiceData.saved_daily_times[today] = (userVoiceData.saved_daily_times[today] || 0) + safeTimeSpent;
+      userVoiceData.join_time = switchTime;
+      userVoiceData.last_update_time = switchTime;
+      console.log(`${user.username} switched channels after ${safeTimeSpent} seconds at ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
       debounceSaveUserVoiceData(userVoiceData);
-      if (timeSpent < 0) {
-        console.error(`Negative timeSpent detected for ${user.id}: ${timeSpent} seconds (corrected to 0)`);
-      }
+    }
+  } 
+  // User leaves voice entirely
+  else if (!newState.channelId && oldState.channelId) {
+    if (userVoiceData.join_time && userVoiceData.last_update_time) {
+      const leaveTime = now.getTime();
+      const timeSpent = Math.floor((leaveTime - userVoiceData.last_update_time) / 1000);
+      const safeTimeSpent = Math.max(0, timeSpent);
+      userVoiceData.saved_total_time += safeTimeSpent;
+      userVoiceData.saved_daily_times[today] = (userVoiceData.saved_daily_times[today] || 0) + safeTimeSpent;
+      userVoiceData.join_time = null;
+      userVoiceData.last_update_time = null;
+      console.log(`${user.username} left voice after ${safeTimeSpent} seconds on ${today}`);
+      debounceSaveUserVoiceData(userVoiceData);
     } else {
       console.warn(`${user.username} left but no join_time recorded`);
     }
@@ -582,7 +665,7 @@ function generateUserCard(user) {
 // Start the Server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}, WebSocket on ws://localhost:8080`);
 });
 
 // Login the Bot
@@ -593,5 +676,6 @@ process.on('SIGINT', async () => {
   console.log('Shutting down server...');
   await flushDebouncedUpdates();
   client.destroy();
+  wss.close();
   process.exit(0);
 });
