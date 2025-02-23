@@ -51,27 +51,19 @@ const VOICE_CACHE_DURATION = 1 * 60 * 1000; // 1 minute
 const debounceTimers = new Map();
 const DEBOUNCE_DELAY = 5000; // 5 seconds
 
-// Simulated time counter for testing
-let simulatedTimeOffset = 0;
-
-// Helper function to get Europe/London time as a Date object
-function getLondonTime() {
+// Helper function to get Israel time (Asia/Jerusalem) as a Date object
+function getIsraelTime() {
   const now = new Date();
-  // For testing, simulate 01:06 GMT on 22/02/2025 with incremental offset
-  // Comment out the lines below for production
-  now.setUTCFullYear(2025, 1, 22); // February is 1 (0-based)
-  now.setUTCHours(1, 6, 0, 0); // 01:06 GMT base
-  now.setUTCSeconds(now.getUTCSeconds() + simulatedTimeOffset); // Increment time
-  simulatedTimeOffset += 5; // Always increase
+  console.log(`Current Israel Time: ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
   return now;
 }
 
-function getLondonDateISO() {
-  const now = getLondonTime();
+function getIsraelDateISO() {
+  const now = getIsraelTime();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, '0');
   const day = String(now.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${year}-${month}-${day}`; // e.g., "2025-02-23"
 }
 
 // Preload voice data cache on startup
@@ -82,6 +74,7 @@ async function preloadVoiceDataCache() {
       voiceDataCache.set(doc.id, { discord_id: doc.id, ...doc.data() });
     });
     lastVoiceDataFetch = Date.now();
+    console.log('Voice data cache preloaded');
   } catch (error) {
     console.error('Error preloading voice data:', error.message);
   }
@@ -197,7 +190,7 @@ app.get('/api/user/voice-time', async (req, res) => {
     }
 
     const data = docSnap.data();
-    voiceDataCache.set(discordId, data);
+    voiceDataCache.set(discordId, { discord_id: discordId, ...data });
     const dailyTimes = data.daily_times || {};
     const dailyTime = dailyTimes[date] || 0;
     const totalTime = data.total_time || 0;
@@ -220,19 +213,19 @@ app.get('/api/admin/all-users', async (req, res) => {
   }
 
   const voiceData = await fetchVoiceDataFromFirestore();
-  const guild = client.guilds.cache.first(); // Assumes bot is in one guild; adjust if multi-guild
+  const guild = client.guilds.cache.first();
   const allUsers = await Promise.all(registeredUsers.map(async (user) => {
     let discordRole = 'user';
-    let serverNickname = user.nickname; // Default to stored nickname
+    let serverNickname = user.nickname;
     try {
       const member = await guild.members.fetch(user.discord_id);
       const roles = member.roles.cache.map(r => r.id);
       if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
       else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
       else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
-      serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
+      serverNickname = member.nickname || member.user.username;
     } catch (error) {
-      // User might not be in guild; keep stored nickname
+      // User might not be in guild
     }
 
     const userVoiceData = voiceData.find(data => data.discord_id === user.discord_id);
@@ -266,14 +259,14 @@ app.get('/api/voice-data', async (req, res) => {
 
   const voiceDataWithRoles = await Promise.all(voiceData.map(async (data) => {
     let discordRole = 'user';
-    let serverNickname = data.nickname; // Default to stored nickname
+    let serverNickname = data.nickname;
     try {
       const member = await guild.members.fetch(data.discord_id);
       const roles = member.roles.cache.map(r => r.id);
       if (roles.includes(process.env.SUPERADMIN_ROLE)) discordRole = 'superadmin';
       else if (roles.includes(process.env.ADMIN_ROLE)) discordRole = 'admin';
       else if (roles.includes(process.env.COADMIN_ROLE)) discordRole = 'coadmin';
-      serverNickname = member.nickname || member.user.username; // Use server nickname or fallback to username
+      serverNickname = member.nickname || member.user.username;
     } catch (error) {
       // User might not be in guild
     }
@@ -479,11 +472,31 @@ function debounceSaveUserVoiceData(userVoiceData) {
         daily_times: dataToSave.daily_times || {},
         join_time: dataToSave.join_time || null
       }, { merge: true });
+      console.log(`Saved voice data for ${discord_id}`);
       debounceTimers.delete(discord_id);
     } catch (error) {
       console.error('Error saving voice data:', error.message);
     }
   }, DEBOUNCE_DELAY));
+}
+
+// Flush all debounced updates
+async function flushDebouncedUpdates() {
+  for (const [discord_id, timer] of debounceTimers) {
+    clearTimeout(timer);
+    const dataToSave = voiceDataCache.get(discord_id);
+    if (dataToSave) {
+      await setDoc(doc(db, 'voice_data', discord_id), {
+        nickname: dataToSave.nickname,
+        avatar: dataToSave.avatar,
+        total_time: dataToSave.total_time || 0,
+        daily_times: dataToSave.daily_times || {},
+        join_time: dataToSave.join_time || null
+      }, { merge: true });
+      console.log(`Flushed data for ${discord_id}`);
+    }
+  }
+  debounceTimers.clear();
 }
 
 // Check if a User is an Admin (Website-specific)
@@ -503,10 +516,10 @@ function formatTime(seconds) {
 // Bot Ready Event
 client.once('ready', async () => {
   await preloadVoiceDataCache();
-  console.log(`Bot logged in as ${client.user.tag} on ${getLondonTime().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`);
+  console.log(`Bot logged in as ${client.user.tag} on ${getIsraelTime().toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
 });
 
-// Handle Voice State Updates (Fixed to prevent negative time)
+// Handle Voice State Updates
 client.on('voiceStateUpdate', (oldState, newState) => {
   const user = newState.member?.user;
   if (!user) return;
@@ -520,24 +533,30 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     join_time: null
   };
 
-  const now = getLondonTime();
-  const today = getLondonDateISO();
+  const now = getIsraelTime();
+  const today = getIsraelDateISO();
 
   if (newState.channelId && !oldState.channelId) {
+    // User joins a voice channel
     userVoiceData.join_time = now.getTime();
+    console.log(`${user.username} joined at ${now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' })}`);
     debounceSaveUserVoiceData(userVoiceData);
   } else if (!newState.channelId && oldState.channelId) {
+    // User leaves a voice channel
     if (userVoiceData.join_time) {
       const leaveTime = now.getTime();
       const timeSpent = Math.floor((leaveTime - userVoiceData.join_time) / 1000);
-      const safeTimeSpent = Math.max(0, timeSpent); // Prevent negative time
-      userVoiceData.total_time += safeTimeSpent;
+      const safeTimeSpent = Math.max(0, timeSpent);
+      userVoiceData.total_time = (userVoiceData.total_time || 0) + safeTimeSpent;
       userVoiceData.daily_times[today] = (userVoiceData.daily_times[today] || 0) + safeTimeSpent;
       userVoiceData.join_time = null;
+      console.log(`${user.username} left after ${safeTimeSpent} seconds on ${today}`);
       debounceSaveUserVoiceData(userVoiceData);
       if (timeSpent < 0) {
         console.error(`Negative timeSpent detected for ${user.id}: ${timeSpent} seconds (corrected to 0)`);
       }
+    } else {
+      console.warn(`${user.username} left but no join_time recorded`);
     }
   }
 });
@@ -568,3 +587,11 @@ app.listen(PORT, () => {
 
 // Login the Bot
 client.login(process.env.BOT_TOKEN).catch(err => console.error('Bot login failed:', err));
+
+// Handle shutdown gracefully
+process.on('SIGINT', async () => {
+  console.log('Shutting down server...');
+  await flushDebouncedUpdates();
+  client.destroy();
+  process.exit(0);
+});
