@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A7 Dashboard</title>
+    <link rel="icon" type="image/x-icon" href="logo.ico">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -610,6 +611,9 @@
 
         <div id="manage-users" class="section">
             <h2>Manage Users 👥</h2>
+            <svg class="refresh-icon" onclick="refreshProfile()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
             <select id="userRoleFilter" class="role-filter" onchange="loadAllUsers()">
                 <option value="all">All Roles</option>
                 <option value="superadmin">Super Admin</option>
@@ -624,6 +628,9 @@
 
         <div id="manage-time" class="section">
             <h2>Manage Time ⏰</h2>
+            <svg class="refresh-icon" onclick="refreshProfile()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
             <select id="timeRoleFilter" class="role-filter" onchange="loadTimeList()">
                 <option value="all">All Roles</option>
                 <option value="superadmin">Super Admin</option>
@@ -677,14 +684,12 @@
         let timerInterval;
         let cachedVoiceData = null;
 
-        function getLondonDateISO() {
+        function getIsraelDateISO() {
             const now = new Date();
-            now.setUTCFullYear(2025, 1, 22);
-            now.setUTCHours(1, 6, 0, 0);
-            const londonTime = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-            const [datePart] = londonTime.split(', ');
+            const israelTime = now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' });
+            const [datePart] = israelTime.split(', ');
             const [day, month, year] = datePart.split('/');
-            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`; // e.g., "2025-02-23"
         }
 
         if (localStorage.getItem('darkMode') === 'true') {
@@ -728,6 +733,7 @@
                 await fetchDailyTime();
                 showSection('profile');
             } catch (error) {
+                console.error('Error loading user data:', error);
                 window.location.href = '/';
             }
         }
@@ -740,6 +746,7 @@
                 if (!response.ok) throw new Error('Failed to preload voice data');
                 cachedVoiceData = await response.json();
             } catch (error) {
+                console.error('Error preloading voice data:', error);
             }
         }
 
@@ -765,7 +772,7 @@
         });
 
         async function fetchDailyTime() {
-            const date = document.getElementById('datePicker').value || getLondonDateISO();
+            const date = document.getElementById('datePicker').value || getIsraelDateISO();
             try {
                 const response = await fetch(`/api/user/voice-time?date=${date}&discordId=${currentUser.discord_id}`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
@@ -777,10 +784,11 @@
                 document.getElementById('selectedDate').textContent = date;
                 document.getElementById('monthlyTime').textContent = formatTime(calculateMonthlyTime(data.dailyTimes));
             } catch (error) {
+                console.error('Error fetching daily time:', error);
                 document.getElementById('dailyTime').textContent = '00:00:00';
                 document.getElementById('totalTime').textContent = '00:00:00';
                 document.getElementById('monthlyTime').textContent = '00:00:00';
-                document.getElementById('selectedDate').textContent = getLondonDateISO();
+                document.getElementById('selectedDate').textContent = getIsraelDateISO();
             }
         }
 
@@ -803,8 +811,6 @@
                 }
 
                 const now = new Date();
-                now.setUTCFullYear(2025, 1, 22);
-                now.setUTCHours(1, 6, 0, 0);
                 let sortedUsers;
 
                 if (period === 'week') {
@@ -922,7 +928,7 @@
 
         async function showUserTime(discordId) {
             try {
-                const today = getLondonDateISO();
+                const today = getIsraelDateISO();
                 const response = await fetch(`/api/user/voice-time?date=${today}&discordId=${discordId}`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
@@ -933,6 +939,7 @@
 
                 const modalContent = document.getElementById('timeModalContent');
                 modalContent.innerHTML = `
+                    <span class="modal-close" onclick="closeModal('timeModal')">×</span>
                     <h3>${data.nickname || 'Unknown'}'s Time ⏰</h3>
                     <div class="time-dashboard">
                         <div class="time-circles">
@@ -975,6 +982,7 @@
 
                 const modalContent = document.getElementById('profileModalContent');
                 modalContent.innerHTML = `
+                    <span class="modal-close" onclick="closeModal('profileModal')">×</span>
                     <h3>${user.nickname}'s Profile 👤</h3>
                     <img src="${user.avatar}" alt="${user.nickname}" style="width: 80px; height: 80px; border-radius: 50%; display: block; margin: 0 auto 1rem;">
                     <div class="profile-edit">
@@ -1002,6 +1010,7 @@
                     ${date} ⏳
                 `;
             } catch (error) {
+                console.error('Error fetching user daily time:', error);
             }
         }
 
@@ -1080,10 +1089,8 @@
 
         function calculateMonthlyTime(dailyTimes) {
             const now = new Date();
-            now.setUTCFullYear(2025, 1, 22);
-            now.setUTCHours(1, 6, 0, 0);
             const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1).toISOString().split('T')[0];
-            return Object.entries(dailyTimes)
+            return Object.entries(dailyTimes || {})
                 .filter(([date]) => date >= monthStart)
                 .reduce((sum, [, time]) => sum + time, 0);
         }
@@ -1114,7 +1121,7 @@
                 const unregisteredVoiceUsers = filteredVoiceData.filter(user => !registeredIds.has(user.discord_id));
                 unregisteredVoiceUsers.sort((a, b) => (b.total_time || 0) - (a.total_time || 0));
 
-                const selectedDate = document.getElementById('timeDatePicker').value || getLondonDateISO();
+                const selectedDate = document.getElementById('timeDatePicker').value || getIsraelDateISO();
                 const list = document.getElementById('timeList');
                 list.innerHTML = '';
 
