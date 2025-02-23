@@ -10,13 +10,14 @@
         body {
             font-family: 'Roboto', sans-serif;
             margin: 0;
-            background: linear-gradient(135deg, #ecf0f1 0%, #d1d8e0 100%);
-            color: #34495e;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2c3e50;
             transition: background 0.3s, color 0.3s;
+            overflow-x: hidden;
         }
         body.dark-mode {
             background: linear-gradient(135deg, #1e272e 0%, #2d3436 100%);
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .navbar {
             display: flex;
@@ -25,7 +26,10 @@
             background: linear-gradient(90deg, #2c3e50, #34495e);
             padding: 1rem 2rem;
             color: #ecf0f1;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
             transition: background 0.3s;
         }
         body.dark-mode .navbar {
@@ -39,16 +43,20 @@
         .logo {
             height: 50px;
             filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            transition: transform 0.3s;
+        }
+        .logo:hover {
+            transform: scale(1.05);
         }
         .navbar-title {
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 700;
             color: #ecf0f1;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             transition: color 0.3s;
         }
         body.dark-mode .navbar-title {
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .user-info {
             position: relative;
@@ -65,7 +73,7 @@
             transition: border-color 0.3s ease, transform 0.3s ease;
         }
         body.dark-mode .user-info img {
-            border-color: #d1d8e0;
+            border-color: #dfe6e9;
         }
         .user-info img:hover {
             border-color: #00b4d8;
@@ -81,20 +89,22 @@
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
             min-width: 120px;
             z-index: 1000;
-            transition: background 0.3s;
-        }
-        body.dark-mode .dropdown {
-            background: #2d3436;
+            transition: background 0.3s, opacity 0.2s;
+            opacity: 0;
         }
         .dropdown.active {
             display: block;
+            opacity: 1;
+        }
+        body.dark-mode .dropdown {
+            background: #2d3436;
         }
         .dropdown button {
             width: 100%;
             padding: 0.75rem 1rem;
             background: none;
             border: none;
-            color: #34495e;
+            color: #2c3e50;
             text-align: left;
             cursor: pointer;
             font-size: 0.9rem;
@@ -102,7 +112,7 @@
             transition: background-color 0.3s ease, color 0.3s;
         }
         body.dark-mode .dropdown button {
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .dropdown button:hover {
             background-color: #f0f2f5;
@@ -123,13 +133,14 @@
             max-width: 1280px;
             margin: 2rem auto;
             padding: 2rem;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 16px;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
             transition: background 0.3s;
         }
         body.dark-mode .container {
-            background: rgba(45, 52, 54, 0.95);
+            background: rgba(45, 52, 54, 0.98);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
         }
         .buttons {
             display: flex;
@@ -146,12 +157,13 @@
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s;
             box-shadow: 0 4px 15px rgba(0, 180, 216, 0.3);
         }
         button:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(0, 180, 216, 0.5);
+            background: linear-gradient(45deg, #3498db, #00ddeb);
         }
         .refresh-icon {
             width: 24px;
@@ -173,7 +185,7 @@
             margin-right: 0.5rem;
         }
         body.dark-mode .theme-toggle {
-            fill: #d1d8e0;
+            fill: #dfe6e9;
         }
         .theme-toggle:hover {
             fill: #00b4d8;
@@ -190,13 +202,15 @@
             padding: 1.5rem;
             background: rgba(249, 251, 252, 0.9);
             border-radius: 12px;
-            transition: background 0.3s;
-        }
-        body.dark-mode .section {
-            background: rgba(53, 59, 72, 0.9);
+            transition: background 0.3s, opacity 0.3s;
+            opacity: 0;
         }
         .section.active {
             display: block;
+            opacity: 1;
+        }
+        body.dark-mode .section {
+            background: rgba(53, 59, 72, 0.9);
         }
         h2 {
             color: #2c3e50;
@@ -207,7 +221,7 @@
             transition: color 0.3s;
         }
         body.dark-mode h2 {
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .user-cards, .top-list {
             display: grid;
@@ -225,11 +239,13 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         }
         body.dark-mode .user-card, 
         body.dark-mode .top-list-item {
             border-color: #4b5e67;
             background: #2d3436;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
         .user-card:hover, .top-list-item:hover {
             transform: translateY(-5px);
@@ -249,16 +265,21 @@
             height: 80px;
             border-radius: 50%;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        .user-card .avatar-container img:hover, 
+        .top-list-item .avatar-container img:hover {
+            transform: scale(1.05);
         }
         .user-card .avatar-container span, 
         .top-list-item .avatar-container span {
             font-size: 1.1rem;
             font-weight: 500;
-            color: #34495e;
+            color: #2c3e50;
         }
         body.dark-mode .user-card .avatar-container span, 
         body.dark-mode .top-list-item .avatar-container span {
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .user-card .icons {
             position: absolute;
@@ -287,11 +308,12 @@
             background: #fff;
             font-size: 1rem;
             transition: border-color 0.3s ease, background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
         }
         body.dark-mode .search {
             border-color: #4b5e67;
             background: #353b48;
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .search:focus {
             border-color: #00b4d8;
@@ -299,7 +321,7 @@
             box-shadow: 0 0 8px rgba(0, 180, 216, 0.3);
         }
         .calendar {
-            margin-top: 1.5rem;
+            margin-top: 1rem;
             display: flex;
             align-items: center;
             gap: 1rem;
@@ -315,13 +337,14 @@
             box-sizing: border-box;
             margin-bottom: 1rem;
             transition: border-color 0.3s ease, background 0.3s, color 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
         }
         body.dark-mode input[type="date"], 
         body.dark-mode input[type="text"], 
         body.dark-mode input[type="password"] {
             border-color: #4b5e67;
             background: #353b48;
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         input:focus {
             border-color: #00b4d8;
@@ -337,11 +360,13 @@
         #passwordMessage {
             margin-top: 1rem;
             font-size: 0.9rem;
+            transition: color 0.3s;
         }
         .error-message {
             color: #c0392b;
             text-align: center;
             margin-top: 1rem;
+            font-weight: 500;
             transition: color 0.3s;
         }
         body.dark-mode .error-message {
@@ -357,6 +382,7 @@
         body.dark-mode .time-dashboard, 
         body.dark-mode .profile-edit {
             background: #2d3436;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
         .time-circles {
             display: flex;
@@ -370,17 +396,28 @@
             width: 180px;
             height: 180px;
             border-radius: 50%;
-            background: conic-gradient(#00b4d8 0% 85%, #ecf0f1 85% 100%);
+            background: conic-gradient(#00b4d8 0deg, #00b4d8 0deg, #ecf0f1 0deg, #ecf0f1 360deg);
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             box-shadow: 0 6px 20px rgba(0, 180, 216, 0.3);
+            overflow: hidden;
         }
         body.dark-mode .circle {
-            background: conic-gradient(#00b4d8 0% 85%, #4b5e67 85% 100%);
+            background: conic-gradient(#00b4d8 0deg, #00b4d8 0deg, #4b5e67 0deg, #4b5e67 360deg);
             box-shadow: 0 6px 20px rgba(0, 180, 216, 0.5);
+        }
+        .circle.loading::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(#00b4d8 0deg, transparent 360deg);
+            animation: spin 1s linear infinite;
+            z-index: 1;
         }
         .circle:hover {
             transform: scale(1.05);
@@ -396,12 +433,14 @@
             align-items: center;
             justify-content: center;
             font-size: 1rem;
-            color: #34495e;
+            color: #2c3e50;
             transition: background 0.3s, color 0.3s;
+            position: relative;
+            z-index: 2;
         }
         body.dark-mode .circle-inner {
             background: rgba(45, 52, 54, 0.95);
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .circle-inner span {
             font-size: 1.8rem;
@@ -418,13 +457,13 @@
             margin: 0.5rem 0;
             border: none;
             background: transparent;
-            color: #34495e;
+            color: #2c3e50;
             text-align: center;
             font-size: 1rem;
             padding: 0;
         }
         body.dark-mode .circle-middle input[type="date"] {
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .circle-middle input[type="date"]::-webkit-calendar-picker-indicator {
             filter: invert(48%) sepia(13%) saturate(3207%) hue-rotate(130deg) brightness(95%) contrast(80%);
@@ -443,6 +482,10 @@
             justify-content: center;
             align-items: center;
             z-index: 2000;
+            transition: opacity 0.3s;
+        }
+        .modal.active {
+            display: flex;
         }
         .modal-content {
             background: #fff;
@@ -453,7 +496,11 @@
             position: relative;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
             text-align: center;
-            transition: background 0.3s;
+            transition: background 0.3s, transform 0.3s;
+            transform: scale(0.95);
+        }
+        .modal.active .modal-content {
+            transform: scale(1);
         }
         body.dark-mode .modal-content {
             background: #2d3436;
@@ -492,6 +539,7 @@
             font-size: 1.2rem;
             color: #e74c3c;
             margin-bottom: 1rem;
+            font-weight: 500;
         }
         .role-filter {
             width: 200px;
@@ -501,13 +549,14 @@
             border-radius: 8px;
             background: #fff;
             font-size: 1rem;
-            color: #34495e;
+            color: #2c3e50;
             transition: border-color 0.3s ease, background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
         }
         body.dark-mode .role-filter {
             border-color: #4b5e67;
             background: #353b48;
-            color: #d1d8e0;
+            color: #dfe6e9;
         }
         .role-filter:focus {
             border-color: #00b4d8;
@@ -527,9 +576,14 @@
             font-size: 0.9rem;
             align-self: flex-end;
             margin-top: 0.5rem;
+            font-weight: 500;
         }
         .discord-role.coadmin {
             color: #800080;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -573,27 +627,29 @@
                     <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                 </svg>
             </div>
-            <div class="time-circles">
-                <div class="circle">
+            <div class="calendar">
+                <input type="date" id="profileDatePicker" onchange="fetchDailyTime()">
+            </div>
+            <div class="time-circles" id="timeCircles">
+                <div class="circle" id="dailyCircle">
                     <div class="circle-inner">
                         <span id="dailyTime">00:00:00</span>
                         Today’s Time ⏳
                     </div>
                 </div>
-                <div class="circle circle-middle">
+                <div class="circle" id="selectedCircle">
                     <div class="circle-inner">
-                        <span id="selectedDate"></span>
-                        <input type="date" id="datePicker" onchange="fetchDailyTime()">
-                        Select Date 📅
+                        <span id="selectedTime">00:00:00</span>
+                        Selected Date 📅
                     </div>
                 </div>
-                <div class="circle">
+                <div class="circle" id="monthlyCircle">
                     <div class="circle-inner">
                         <span id="monthlyTime">00:00:00</span>
                         This Month 🌙
                     </div>
                 </div>
-                <div class="circle">
+                <div class="circle" id="totalCircle">
                     <div class="circle-inner">
                         <span id="totalTime">00:00:00</span>
                         Total Time 🌌
@@ -683,13 +739,15 @@
         let currentUser;
         let timerInterval;
         let cachedVoiceData = null;
+        let ws;
+        let currentPeriod = 'all';
 
         function getIsraelDateISO() {
             const now = new Date();
             const israelTime = now.toLocaleString('en-GB', { timeZone: 'Asia/Jerusalem' });
             const [datePart] = israelTime.split(', ');
             const [day, month, year] = datePart.split('/');
-            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`; // e.g., "2025-02-23"
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         }
 
         if (localStorage.getItem('darkMode') === 'true') {
@@ -701,6 +759,7 @@
             window.location.href = '/';
         } else {
             loadUserData();
+            setupWebSocket();
         }
 
         async function loadUserData() {
@@ -708,10 +767,7 @@
                 const response = await fetch('/api/user/me', { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    throw new Error(`Failed to fetch user data: ${text}`);
-                }
+                if (!response.ok) throw new Error(await response.text());
                 currentUser = await response.json();
 
                 document.getElementById('nickname').textContent = currentUser.nickname || 'Unknown';
@@ -729,7 +785,6 @@
                         localStorage.setItem('isLoggedIn', 'true');
                     }
                 }
-                await preloadVoiceData();
                 await fetchDailyTime();
                 showSection('profile');
             } catch (error) {
@@ -738,16 +793,21 @@
             }
         }
 
-        async function preloadVoiceData() {
-            try {
-                const response = await fetch('/api/voice-data', { 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                });
-                if (!response.ok) throw new Error('Failed to preload voice data');
-                cachedVoiceData = await response.json();
-            } catch (error) {
-                console.error('Error preloading voice data:', error);
-            }
+        function setupWebSocket() {
+            ws = new WebSocket('ws://localhost:8080');
+            ws.onopen = () => console.log('WebSocket connected');
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.type === 'voice_update') {
+                    cachedVoiceData = message.data;
+                    updateProfileTime();
+                    if (document.getElementById('top-list').classList.contains('active')) {
+                        showTopList(currentPeriod);
+                    }
+                }
+            };
+            ws.onerror = (error) => console.error('WebSocket error:', error);
+            ws.onclose = () => console.log('WebSocket closed');
         }
 
         const userInfo = document.getElementById('userInfo');
@@ -772,23 +832,39 @@
         });
 
         async function fetchDailyTime() {
-            const date = document.getElementById('datePicker').value || getIsraelDateISO();
+            const date = document.getElementById('profileDatePicker').value || getIsraelDateISO();
+            const circles = document.querySelectorAll('.circle');
+            circles.forEach(circle => circle.classList.add('loading'));
             try {
                 const response = await fetch(`/api/user/voice-time?date=${date}&discordId=${currentUser.discord_id}`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
                 if (!response.ok) throw new Error('Failed to fetch daily time');
                 const data = await response.json();
-                document.getElementById('dailyTime').textContent = data.voiceTime;
+                document.getElementById('dailyTime').textContent = formatTime(data.dailyTimes[getIsraelDateISO()] || 0);
+                document.getElementById('selectedTime').textContent = data.voiceTime;
                 document.getElementById('totalTime').textContent = data.totalTime;
-                document.getElementById('selectedDate').textContent = date;
                 document.getElementById('monthlyTime').textContent = formatTime(calculateMonthlyTime(data.dailyTimes));
             } catch (error) {
                 console.error('Error fetching daily time:', error);
                 document.getElementById('dailyTime').textContent = '00:00:00';
+                document.getElementById('selectedTime').textContent = '00:00:00';
                 document.getElementById('totalTime').textContent = '00:00:00';
                 document.getElementById('monthlyTime').textContent = '00:00:00';
-                document.getElementById('selectedDate').textContent = getIsraelDateISO();
+            } finally {
+                circles.forEach(circle => circle.classList.remove('loading'));
+            }
+        }
+
+        function updateProfileTime() {
+            const today = getIsraelDateISO();
+            const selectedDate = document.getElementById('profileDatePicker').value || today;
+            const userData = cachedVoiceData?.find(data => data.discord_id === currentUser.discord_id);
+            if (userData) {
+                document.getElementById('dailyTime').textContent = formatTime(userData.daily_times[today] || 0);
+                document.getElementById('selectedTime').textContent = formatTime(userData.daily_times[selectedDate] || 0);
+                document.getElementById('totalTime').textContent = formatTime(userData.total_time || 0);
+                document.getElementById('monthlyTime').textContent = formatTime(calculateMonthlyTime(userData.daily_times));
             }
         }
 
@@ -797,74 +873,74 @@
         }
 
         async function showTopList(period) {
+            currentPeriod = period;
             const errorElement = document.getElementById('topListError');
             errorElement.textContent = '';
-            try {
-                let voiceData = cachedVoiceData;
-                if (!voiceData) {
+            if (!cachedVoiceData) {
+                try {
                     const response = await fetch('/api/voice-data', { 
                         headers: { 'Authorization': `Bearer ${token}` } 
                     });
-                    if (!response.ok) throw new Error('Failed to fetch voice data');
-                    voiceData = await response.json();
-                    cachedVoiceData = voiceData;
+                    if (!response.ok) throw new Error('Failed to fetch initial voice data');
+                    cachedVoiceData = await response.json();
+                } catch (error) {
+                    errorElement.textContent = 'Failed to load top list: ' + error.message;
+                    return;
                 }
-
-                const now = new Date();
-                let sortedUsers;
-
-                if (period === 'week') {
-                    const weekStart = new Date(now);
-                    weekStart.setUTCDate(now.getUTCDate() - now.getUTCDay());
-                    const weekStartISO = weekStart.toISOString().split('T')[0];
-                    sortedUsers = voiceData.map(user => ({
-                        nickname: user.nickname,
-                        avatar: user.avatar || 'https://via.placeholder.com/100',
-                        time: Object.entries(user.daily_times || {})
-                            .filter(([date]) => date >= weekStartISO)
-                            .reduce((sum, [, time]) => sum + time, 0)
-                    })).sort((a, b) => b.time - a.time);
-                    document.getElementById('topListTitle').textContent = 'Top Week';
-                } else if (period === 'month') {
-                    const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1).toISOString().split('T')[0];
-                    sortedUsers = voiceData.map(user => ({
-                        nickname: user.nickname,
-                        avatar: user.avatar || 'https://via.placeholder.com/100',
-                        time: Object.entries(user.daily_times || {})
-                            .filter(([date]) => date >= monthStart)
-                            .reduce((sum, [, time]) => sum + time, 0)
-                    })).sort((a, b) => b.time - a.time);
-                    document.getElementById('topListTitle').textContent = 'Top Month';
-                } else { // all time
-                    sortedUsers = voiceData.map(user => ({
-                        nickname: user.nickname,
-                        avatar: user.avatar || 'https://via.placeholder.com/100',
-                        time: user.total_time || 0
-                    })).sort((a, b) => b.time - a.time);
-                    document.getElementById('topListTitle').textContent = 'Top All Time';
-                }
-
-                const list = document.getElementById('topListCards');
-                list.innerHTML = '';
-
-                sortedUsers.forEach(user => {
-                    const div = document.createElement('div');
-                    div.className = 'top-list-item';
-                    div.innerHTML = `
-                        <div class="avatar-container">
-                            <img src="${user.avatar}" alt="${user.nickname}">
-                            <span>${user.nickname}</span>
-                        </div>
-                        <p>Time: ${formatTime(user.time)}</p>
-                    `;
-                    list.appendChild(div);
-                });
-
-                showSection('top-list');
-                document.getElementById('topListDropdown').classList.remove('active');
-            } catch (error) {
-                errorElement.textContent = 'Failed to load top list: ' + error.message;
             }
+
+            const now = new Date();
+            let sortedUsers;
+
+            if (period === 'week') {
+                const weekStart = new Date(now);
+                weekStart.setUTCDate(now.getUTCDate() - now.getUTCDay());
+                const weekStartISO = weekStart.toISOString().split('T')[0];
+                sortedUsers = cachedVoiceData.map(user => ({
+                    nickname: user.nickname,
+                    avatar: user.avatar || 'https://via.placeholder.com/100',
+                    time: Object.entries(user.daily_times || {})
+                        .filter(([date]) => date >= weekStartISO)
+                        .reduce((sum, [, time]) => sum + time, 0)
+                })).sort((a, b) => b.time - a.time);
+                document.getElementById('topListTitle').textContent = 'Top Week (Live)';
+            } else if (period === 'month') {
+                const monthStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1).toISOString().split('T')[0];
+                sortedUsers = cachedVoiceData.map(user => ({
+                    nickname: user.nickname,
+                    avatar: user.avatar || 'https://via.placeholder.com/100',
+                    time: Object.entries(user.daily_times || {})
+                        .filter(([date]) => date >= monthStart)
+                        .reduce((sum, [, time]) => sum + time, 0)
+                })).sort((a, b) => b.time - a.time);
+                document.getElementById('topListTitle').textContent = 'Top Month (Live)';
+            } else { // all time
+                sortedUsers = cachedVoiceData.map(user => ({
+                    nickname: user.nickname,
+                    avatar: user.avatar || 'https://via.placeholder.com/100',
+                    time: user.total_time || 0
+                })).sort((a, b) => b.time - a.time);
+                document.getElementById('topListTitle').textContent = 'Top All Time (Live)';
+            }
+
+            const list = document.getElementById('topListCards');
+            list.innerHTML = '';
+
+            sortedUsers.forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'top-list-item';
+                div.innerHTML = `
+                    <div class="avatar-container">
+                        <img src="${user.avatar}" alt="${user.nickname}">
+                        <span>${user.nickname}</span>
+                    </div>
+                    <p>Time: ${formatTime(user.time)}</p>
+                `;
+                list.appendChild(div);
+            });
+
+            showSection('top-list');
+            document.getElementById('topListDropdown').classList.remove('active');
         }
 
         function searchTopList() {
@@ -967,7 +1043,7 @@
                         </div>
                     </div>
                 `;
-                document.getElementById('timeModal').style.display = 'flex';
+                document.getElementById('timeModal').classList.add('active');
             } catch (error) {
                 alert('Failed to load time data: ' + error.message);
             }
@@ -993,7 +1069,7 @@
                         <button onclick="deleteUser('${discordId}')">Delete Registration 🗑️</button>
                     </div>
                 `;
-                document.getElementById('profileModal').style.display = 'flex';
+                document.getElementById('profileModal').classList.add('active');
             } catch (error) {
                 alert('Failed to load profile data: ' + error.message);
             }
@@ -1084,7 +1160,7 @@
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+            document.getElementById(modalId).classList.remove('active');
         }
 
         function calculateMonthlyTime(dailyTimes) {
@@ -1106,18 +1182,16 @@
                 const registeredUsers = await allUsersResponse.json();
                 const registeredIds = new Set(registeredUsers.map(user => user.discord_id));
 
-                let voiceData = cachedVoiceData;
-                if (!voiceData) {
+                if (!cachedVoiceData) {
                     const voiceResponse = await fetch('/api/voice-data', { 
                         headers: { 'Authorization': `Bearer ${token}` } 
                     });
                     if (!voiceResponse.ok) throw new Error('Failed to fetch voice data');
-                    voiceData = await voiceResponse.json();
-                    cachedVoiceData = voiceData;
+                    cachedVoiceData = await voiceResponse.json();
                 }
 
                 const roleFilter = document.getElementById('timeRoleFilter').value;
-                const filteredVoiceData = roleFilter === 'all' ? voiceData : voiceData.filter(data => data.discordRole === roleFilter);
+                const filteredVoiceData = roleFilter === 'all' ? cachedVoiceData : cachedVoiceData.filter(data => (data.discordRole || 'user') === roleFilter);
                 const unregisteredVoiceUsers = filteredVoiceData.filter(user => !registeredIds.has(user.discord_id));
                 unregisteredVoiceUsers.sort((a, b) => (b.total_time || 0) - (a.total_time || 0));
 
@@ -1134,7 +1208,7 @@
                     const dayTime = user.daily_times && user.daily_times[selectedDate] ? user.daily_times[selectedDate] : 0;
                     const div = document.createElement('div');
                     div.className = 'user-card';
-                    const discordRoleClass = user.discordRole === 'coadmin' ? 'coadmin' : '';
+                    const discordRoleClass = (user.discordRole || 'user') === 'coadmin' ? 'coadmin' : '';
                     div.innerHTML = `
                         ${user.isWebsiteAdmin ? '<span class="website-admin">ADMIN</span>' : ''}
                         <div class="avatar-container">
@@ -1142,7 +1216,7 @@
                             <span>${user.nickname || 'Unknown'}</span>
                         </div>
                         <p>ID: ${user.discord_id}</p>
-                        <span class="discord-role ${discordRoleClass}">Discord ${user.discordRole.charAt(0).toUpperCase() + user.discordRole.slice(1)}</span>
+                        <span class="discord-role ${discordRoleClass}">Discord ${(user.discordRole || 'user').charAt(0).toUpperCase() + (user.discordRole || 'user').slice(1)}</span>
                         <div class="icons">
                             <svg class="icon time-icon" onclick="showUserTime('${user.discord_id}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
@@ -1235,7 +1309,7 @@
             let timeLeft = 30;
 
             mainContainer.classList.add('blur');
-            modal.style.display = 'flex';
+            modal.classList.add('active');
             timerElement.textContent = timeLeft;
             resendButton.style.display = 'none';
 
@@ -1254,10 +1328,7 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    throw new Error(`Request failed: ${text}`);
-                }
+                if (!response.ok) throw new Error(await response.text());
             } catch (error) {
                 failTwoFactor('Failed to send 2FA code: ' + error.message);
             }
@@ -1277,13 +1348,10 @@
                     },
                     body: JSON.stringify({ code }),
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    throw new Error(`Verify failed: ${text}`);
-                }
+                if (!response.ok) throw new Error(await response.text());
                 clearInterval(timerInterval);
                 mainContainer.classList.remove('blur');
-                document.getElementById('twoFactorModal').style.display = 'none';
+                document.getElementById('twoFactorModal').classList.remove('active');
                 localStorage.setItem(`2fa_verified_${currentUser.discord_id}`, 'true');
                 localStorage.setItem('isLoggedIn', 'true');
             } catch (error) {
@@ -1319,10 +1387,7 @@
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    throw new Error(`Resend failed: ${text}`);
-                }
+                if (!response.ok) throw new Error(await response.text());
             } catch (error) {
                 failTwoFactor('Failed to resend 2FA code: ' + error.message);
             }
@@ -1334,7 +1399,7 @@
             errorMessage.textContent = message;
             errorMessage.style.display = 'block';
             setTimeout(() => {
-                document.getElementById('twoFactorModal').style.display = 'none';
+                document.getElementById('twoFactorModal').classList.remove('active');
                 mainContainer.classList.remove('blur');
                 logout();
             }, 2000);
